@@ -1,0 +1,9 @@
+# CareBridge Backend Requirements
+# Install with: pip install -r requirements.txt
+
+Flask==3.0.0
+flask-cors==4.0.0
+ollama==0.1.6
+
+# Optional: for better JSON handling
+python-dotenv==1.0.0
