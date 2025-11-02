@@ -15,6 +15,7 @@ import Footer from './Footer';
 import { ResultsPageProps } from '../types';
 import { translateText } from '../services/translationService';
 import { toast } from 'sonner@2.0.3';
+import { loadMedicalTermsGlossary, explainMedicalTerm } from '../services/medicalTermsService';
 
 interface SelectedTermData {
   term: string;
@@ -32,6 +33,8 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
   const [selectedLanguage, setSelectedLanguage] = useState<string>('en');
   const [translatedText, setTranslatedText] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
+  const [medicalGlossary, setMedicalGlossary] = useState<{ [key: string]: { simple: string; explanation: string } }>({});
+
 
   useEffect(() => {
     if (!documentData) {
@@ -42,6 +45,21 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
   // Scroll to top when component mounts
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
+  // Load medical terms glossary on mount
+  useEffect(() => {
+    const loadGlossary = async () => {
+      try {
+        const glossary = await loadMedicalTermsGlossary();
+        setMedicalGlossary(glossary);
+        console.log('[ResultsPage] Medical glossary loaded with', Object.keys(glossary).length, 'terms');
+      } catch (error) {
+        console.error('[ResultsPage] Failed to load medical glossary:', error);
+      }
+    };
+    
+    loadGlossary();
   }, []);
 
   // Handle language translation
@@ -185,29 +203,33 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
     );
   };
 
-  const handleTermClick = (term: string, simplified: string) => {
-    const explanations: { [key: string]: string } = {
-      'acute myocardial infarction': 'A heart attack occurs when blood flow to part of the heart muscle is blocked, usually by a blood clot. This can damage or destroy part of the heart muscle. Immediate treatment is critical to restore blood flow and minimize damage.',
-      'hypertension': 'High blood pressure is a condition where the force of blood against artery walls is consistently too high. Over time, this can lead to heart disease, stroke, and other serious health problems. It often has no symptoms but can be managed with medication and lifestyle changes.',
-      'type 2 diabetes mellitus': 'Type 2 diabetes is a chronic condition that affects how your body processes blood sugar (glucose). Your body either doesn\'t produce enough insulin or resists insulin\'s effects. This leads to high blood sugar levels that can cause serious health complications if not managed properly.',
-      'dyspnea': 'Shortness of breath or difficulty breathing can occur for many reasons. In the context of heart problems, it often happens because the heart isn\'t pumping efficiently, causing fluid to back up in the lungs. This makes it harder to breathe, especially during physical activity or when lying flat.',
-      'electrocardiogram': 'An ECG is a simple, painless test that records the electrical activity of your heart. It shows how fast your heart is beating and whether its rhythm is steady or irregular. It can also reveal if parts of your heart are enlarged or overworked, and if there\'s damage from a heart attack.',
-      'ST-segment elevation': 'This is a specific pattern seen on an ECG that indicates a severe type of heart attack. It shows that part of the heart muscle is being damaged due to complete blockage of a coronary artery. This requires immediate treatment to restore blood flow.',
-      'percutaneous coronary intervention': 'This is a minimally invasive procedure used to open blocked coronary arteries. A thin tube (catheter) is inserted through an artery in your wrist or groin and guided to the blocked area. A balloon is inflated to widen the artery, and usually a stent is placed to keep it open.',
-      'stent': 'A stent is a small mesh tube made of metal that acts as a scaffold to keep a coronary artery open after it has been cleared of blockages. It\'s permanently placed during a procedure and helps maintain blood flow to the heart muscle, reducing the risk of future blockages.',
-      'left anterior descending artery': 'Often called the "widow maker," this is one of the most important arteries in your heart. It supplies oxygen-rich blood to the large front wall of the heart. Blockages in this artery can be particularly dangerous because they affect a large portion of the heart muscle.',
-      'PO': 'This medical abbreviation means "by mouth" (from the Latin "per os"). It indicates that you should swallow the medication rather than taking it in another way, such as by injection or through an IV.',
-      'BID': 'This medical abbreviation means "twice a day" (from the Latin "bis in die"). It indicates that you should take the medication two times daily, typically spaced about 12 hours apart, such as morning and evening.',
-      'cardiac rehabilitation': 'This is a medically supervised program designed to help people recover from heart attacks and other heart conditions. It includes monitored exercise, education about heart-healthy living, and counseling to reduce stress. It helps improve your cardiovascular health and reduces the risk of future heart problems.',
-      'palpitations': 'Heart palpitations are feelings that your heart is racing, fluttering, pounding, or skipping beats. While often harmless, they can sometimes indicate an irregular heart rhythm that needs medical attention, especially if accompanied by dizziness, chest pain, or shortness of breath.',
-      'syncope': 'Fainting is a temporary loss of consciousness caused by a lack of blood flow to the brain. It can be caused by many things, including heart rhythm problems, dehydration, or sudden changes in blood pressure. If you experience fainting, especially repeatedly, it\'s important to seek medical evaluation.'
-    };
-
-    setSelectedTerm({
-      term,
-      simplified,
-      explanation: explanations[term.toLowerCase()] || 'This is a medical term that requires professional explanation. Please consult with your healthcare provider for more information.'
-    });
+   const handleTermClick = async (term: string) => {
+    try {
+      console.log('[ResultsPage] Explaining term:', term);
+      
+      // Show loading state
+      setSelectedTerm({
+        term,
+        simplified: 'Loading...',
+        explanation: 'Please wait while we fetch the explanation...'
+      });
+      
+      // Get explanation from medical terms service
+      const termData = await explainMedicalTerm(term);
+      
+      setSelectedTerm({
+        term,
+        simplified: termData.simple,
+        explanation: termData.explanation
+      });
+    } catch (error) {
+      console.error('[ResultsPage] Error explaining term:', error);
+      setSelectedTerm({
+        term,
+        simplified: term,
+        explanation: 'Unable to load explanation at this time. Please consult your healthcare provider for more information.'
+      });
+    }
   };
 
   const highlightTerms = (text: string, isOriginal: boolean = true): JSX.Element => {
@@ -217,22 +239,26 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       return <div>{String(text)}</div>;
     }
     
+    // CRITICAL CHANGE: Only highlight terms in the ORIGINAL text
+    // Simplified text should NOT have highlighting (per requirements)
+    if (!isOriginal) {
+      return <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">{text}</div>;
+    }
+    
+    // Use loaded glossary instead of documentData.terms
     let result = text;
-    const terms = Object.keys(documentData.terms || {});
+    const terms = Object.keys(medicalGlossary);
     
     terms.forEach(term => {
-      const simplified = documentData.terms[term];
       const regex = new RegExp(`\\b${term}\\b`, 'gi');
-      const bgColor = isOriginal ? 'bg-red-100' : 'bg-green-100';
-      const textColor = isOriginal ? 'text-red-600' : 'text-green-600';
-      
+      // Always use red highlight for original text medical terms
       result = result.replace(
         regex,
-        `<span class="medical-term ${bgColor} ${textColor} px-1 rounded cursor-pointer hover:shadow-md transition-shadow" data-term="${term}" data-simplified="${simplified}">${term}</span>`
+        `<span class="medical-term bg-red-100 text-red-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-200 hover:shadow-lg transition-all font-medium" data-term="${term}">${term}</span>`
       );
     });
 
-    return <div dangerouslySetInnerHTML={{ __html: result }} />;
+    return <div className="prose prose-sm max-w-none whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: result }} />;
   };
 
   useEffect(() => {
@@ -241,8 +267,8 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       if (target.classList.contains('medical-term')) {
         const term = target.dataset.term;
         const simplified = target.dataset.simplified;
-        if (term && simplified) {
-          handleTermClick(term, simplified);
+        if (term) {
+          handleTermClick(term);
         }
       }
     };
@@ -457,7 +483,7 @@ This document is for educational purposes only.
             <Alert className="glass-card bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 shadow-lg">
               <Info className="h-6 w-6 text-green-600" />
               <AlertDescription className="text-green-800">
-                <strong>How to Use This View:</strong> Click on any highlighted medical term in the original text or simplified explanation to see detailed definitions and explanations.
+                <strong>How to Use This View:</strong> Click on any highlighted medical term in the original text (left panel) to see detailed definitions and explanations. The simplified text (right panel) uses plain language with no medical jargon.
               </AlertDescription>
             </Alert>
           </motion.div>
@@ -521,7 +547,7 @@ This document is for educational purposes only.
                   </div>
                 ) : (
                   <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">
-                    {selectedLanguage === 'en' ? highlightTerms(documentData.simplified, false) : <div>{translatedText || documentData.simplified}</div>}
+                    {selectedLanguage === 'en' ? <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">{documentData.simplified}</div> : <div>{translatedText || documentData.simplified}</div>}
                   </div>
                 )}
               </div>

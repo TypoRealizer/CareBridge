@@ -502,6 +502,130 @@ app.post('/api/translate', checkConcurrency, async (req, res) => {
 });
 
 // ============================================
+// MEDICAL TERMS GLOSSARY ENDPOINT
+// ============================================
+
+app.get('/api/medical-terms', async (req, res) => {
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    // Read the medical terms glossary
+    const glossaryPath = path.join(__dirname, '../data/medicalTerms.json');
+    
+    if (!fs.existsSync(glossaryPath)) {
+      return res.status(404).json({
+        error: 'Glossary not found',
+        message: 'Medical terms glossary file not found'
+      });
+    }
+    
+    const glossaryData = fs.readFileSync(glossaryPath, 'utf8');
+    const glossary = JSON.parse(glossaryData);
+    
+    console.log(`[Glossary] Sent ${Object.keys(glossary).length} medical terms`);
+    
+    res.json({
+      terms: glossary,
+      count: Object.keys(glossary).length
+    });
+    
+  } catch (error) {
+    console.error('[Glossary] Error:', error);
+    res.status(500).json({
+      error: 'glossary_error',
+      message: error.message
+    });
+  }
+});
+
+// ============================================
+// EXPLAIN MEDICAL TERM ENDPOINT (Dynamic)
+// ============================================
+
+app.post('/api/explain-term', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { term } = req.body;
+    
+    if (!term || typeof term !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Term is required and must be a string'
+      });
+    }
+    
+    // Sanitize term
+    const sanitizedTerm = term.trim().toLowerCase();
+    
+    if (sanitizedTerm.length > 100) {
+      return res.status(400).json({
+        error: 'Term too long',
+        message: 'Term must be less than 100 characters'
+      });
+    }
+    
+    console.log(`[Explain] Generating explanation for: "${sanitizedTerm}"`);
+    
+    const prompt = prompts.getTermExplanationPrompt(sanitizedTerm);
+    const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
+      temperature: 0.2,
+      max_tokens: 300
+    });
+    
+    // Parse JSON response
+    let explanation;
+    try {
+      explanation = utils.extractJSON(response.response);
+    } catch (parseError) {
+      console.error('[Explain] JSON parse error:', parseError);
+      // Fallback explanation
+      explanation = {
+        simple: sanitizedTerm,
+        explanation: 'This is a medical term. Please consult your healthcare provider for more information.'
+      };
+    }
+    
+    // Validate structure
+    if (!explanation.simple || !explanation.explanation) {
+      explanation = {
+        simple: sanitizedTerm,
+        explanation: 'This is a medical term. Please consult your healthcare provider for more information.'
+      };
+    }
+    
+    console.log(`[Explain] Explanation generated in ${Date.now() - startTime}ms`);
+    
+    res.json({
+      term: sanitizedTerm,
+      simple: explanation.simple,
+      explanation: explanation.explanation,
+      cached: false,
+      processingTime: Date.now() - startTime
+    });
+    
+  } catch (error) {
+    console.error('[Explain] Error:', error);
+    
+    // Handle timeout
+    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+      return res.status(504).json({
+        error: 'explanation_timeout',
+        message: 'Explanation generation took too long.',
+        term: req.body.term
+      });
+    }
+    
+    res.status(500).json({
+      error: 'explanation_error',
+      message: error.message,
+      term: req.body.term
+    });
+  }
+});
+
+// ============================================
 // TTS ENDPOINT (Placeholder)
 // ============================================
 
@@ -546,10 +670,12 @@ app.use((req, res) => {
     message: `Endpoint ${req.method} ${req.path} not found`,
     availableEndpoints: [
       'GET /health',
+      'GET /api/medical-terms',
       'POST /api/summarize',
       'POST /api/care',
       'POST /api/faqs',
       'POST /api/translate',
+      'POST /api/explain-term',
       'POST /api/tts'
     ]
   });

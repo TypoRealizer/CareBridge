@@ -12,27 +12,43 @@
 function getSummarizationPrompt(extractedText, isChunk = false) {
   if (isChunk) {
     // For chunk processing
-    return `SYSTEM: You are a medical-language simplifier. Produce a short, accurate, patient-friendly summary of the given hospital discharge note section.
-GUIDELINES:
-- Keep medical facts unchanged.
-- Use plain language; avoid jargon. Replace technical terms with simple words in parentheses when necessary.
-- Output must be concise and in bullet points.
-- If a medication is ambiguous, flag it as [CONFIRM MED].
+    return `SYSTEM: You are a healthcare assistant AI helping to simplify complex medical discharge summaries for patients with no medical background.
 
-USER: Summarize this section: 
+GUIDELINES:
+- Keep medical facts accurate and unchanged.
+- DO NOT use medical jargon or technical terminology.
+- Replace ALL medical terms with simple, plain-language equivalents. Examples:
+  * "hypertension" → "high blood pressure"
+  * "myocardial infarction" → "heart attack"
+  * "dyspnea" → "difficulty breathing"
+  * "acute renal failure" → "sudden kidney problems"
+- Output must be concise and in bullet points.
+- Use everyday language that a non-medical person can understand.
+- If a medication name is unclear, flag it as [CONFIRM MED].
+
+USER: Summarize this section in plain language:
 ${extractedText}`;
   }
 
   // For full document or final synthesis
-  return `SYSTEM: You are a medical-language simplifier. Produce a short, accurate, patient-friendly summary of the given hospital discharge note.
-GUIDELINES:
-- Keep medical facts unchanged.
-- Use plain language; avoid jargon. Replace technical terms with simple words in parentheses when necessary.
-- Output in bullet points under these headings: Diagnosis, Procedures, Medications (name — dose — timing), Key Warnings, Follow-up.
-- Keep the summary comprehensive but digestible. For large documents, you may exceed 200 words if necessary to maintain completeness.
-- If a medication is ambiguous, flag it as [CONFIRM MED].
+  return `SYSTEM: You are a healthcare assistant AI helping to simplify complex discharge summaries for patients with no medical background.
 
-USER: Summarize: 
+CRITICAL RULES:
+- Keep medical facts accurate and unchanged.
+- DO NOT use medical jargon, technical terms, or Latin terminology.
+- Replace ALL medical terms with simple, everyday language. Examples:
+  * "hypertension" → "high blood pressure"
+  * "myocardial infarction" → "heart attack"
+  * "cerebrovascular accident" → "stroke"
+  * "percutaneous coronary intervention" → "procedure to open blocked heart arteries"
+  * "antiplatelet therapy" → "blood-thinning medication"
+  * "dyspnea" → "difficulty breathing"
+- Make the summary understandable for someone with no medical knowledge.
+- Focus on: what happened, what treatment was given, what the patient needs to do.
+- Organize under these headings: Your Condition, Treatment Given, Medications (with plain names, dose, timing), Important Warnings, Follow-up Care.
+- Keep comprehensive but clear (may exceed 200 words if needed for clarity).
+
+USER: Summarize this discharge summary in plain, simple language:
 ${extractedText}`;
 }
 
@@ -152,10 +168,35 @@ ${text}
 ${langName} Translation:`;
 }
 
+/**
+ * Medical Term Explanation Prompt
+ * Generates simple explanations for medical terms
+ */
+function getTermExplanationPrompt(term) {
+  return `You are a medical educator explaining terms to patients with no medical background.
+
+Explain the medical term "${term}" in 2-3 simple sentences.
+
+Provide your response in this exact JSON format (no extra text):
+{
+  "simple": "Brief plain-language name or definition (5-10 words)",
+  "explanation": "A clear 2-3 sentence explanation of what it is and why/how it occurs, using everyday language."
+}
+
+Example for "hypertension":
+{
+  "simple": "High blood pressure",
+  "explanation": "A condition where the force of blood against artery walls is too high. This can damage blood vessels and organs over time if not controlled with medication and lifestyle changes."
+}
+
+Now explain "${term}":`;
+}
+
 module.exports = {
   getSummarizationPrompt,
   getFinalSynthesisPrompt,
   getCareGuidancePrompt,
   getFAQPrompt,
-  getTranslationPrompt
+  getTranslationPrompt,
+  getTermExplanationPrompt
 };

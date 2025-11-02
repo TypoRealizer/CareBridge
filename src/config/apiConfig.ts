@@ -78,6 +78,8 @@ export const API_ENDPOINTS = {
     CARE_GUIDANCE: `${API_CONFIG.BACKEND_URL}/api/care`,
     TRANSLATE: `${API_CONFIG.BACKEND_URL}/api/translate`,
     TTS: `${API_CONFIG.BACKEND_URL}/api/tts`,
+    MEDICAL_TERMS: `${API_CONFIG.BACKEND_URL}/api/medical-terms`,
+    EXPLAIN_TERM: `${API_CONFIG.BACKEND_URL}/api/explain-term`,
   }
 };
 
