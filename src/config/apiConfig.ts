@@ -77,6 +77,7 @@ export const API_ENDPOINTS = {
     GENERATE_FAQ: `${API_CONFIG.BACKEND_URL}/api/faqs`,
     CARE_GUIDANCE: `${API_CONFIG.BACKEND_URL}/api/care`,
     TRANSLATE: `${API_CONFIG.BACKEND_URL}/api/translate`,
+    TRANSLATE_BATCH: `${API_CONFIG.BACKEND_URL}/api/translate-batch`,
     TTS: `${API_CONFIG.BACKEND_URL}/api/tts`,
     MEDICAL_TERMS: `${API_CONFIG.BACKEND_URL}/api/medical-terms`,
     EXPLAIN_TERM: `${API_CONFIG.BACKEND_URL}/api/explain-term`,
@@ -132,11 +133,11 @@ export const checkBackendConnection = async (): Promise<boolean> => {
 
 /**
  * Supported languages for translation
+ * Translation powered by JigsawStack API (English → Hindi)
  */
 export const SUPPORTED_LANGUAGES = {
   en: 'English',
   hi: 'हिंदी (Hindi)',
-  kn: 'ಕನ್ನಡ (Kannada)',
 } as const;
 
 export type SupportedLanguage = keyof typeof SUPPORTED_LANGUAGES;

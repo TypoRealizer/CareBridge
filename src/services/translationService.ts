@@ -3,39 +3,42 @@ import { API_CONFIG, API_ENDPOINTS, SupportedLanguage, SUPPORTED_LANGUAGES } fro
 /**
  * Translation Service
  * 
- * Uses Ollama (Local LLM) via backend endpoint for translation
- * to Kannada and Hindi
+ * Uses JigsawStack Translation API via backend endpoint for translation
+ * from English to Hindi
  * 
  * Architecture:
- * English Summary → Backend API → Ollama (or HF model) → Translated Text
+ * English Summary → Backend API → JigsawStack API → Translated Text
  * 
  * Benefits:
- * - Offline translation
- * - No API costs
- * - Medical context preserved
+ * - High-quality translation
+ * - Medical terminology handling
+ * - Cost-effective API
+ * 
+ * Note: The backend /api/translate endpoint handles the JigsawStack API call
+ * and returns { translatedText: "...", lang: "hi" }
  */
 
 /**
- * Translate text to target language using Ollama backend
+ * Translate text from English to Hindi using JigsawStack API via backend
  * @param text - Text to translate
- * @param targetLanguage - Target language code ('en', 'hi', 'kn')
+ * @param targetLanguage - Target language code ('en' or 'hi')
  * @param sourceLanguage - Source language code (default: 'en')
- * @returns Translated text
+ * @returns Object containing translated text and translation method used
  */
 export const translateText = async (
   text: string,
   targetLanguage: SupportedLanguage,
   sourceLanguage: SupportedLanguage = 'en'
-): Promise<string> => {
+): Promise<{ translatedText: string; method?: string }> => {
   // If target is same as source, return original
   if (targetLanguage === sourceLanguage) {
-    return text;
+    return { translatedText: text, method: 'passthrough' };
   }
 
-  // If source is not English, return original for now
-  if (sourceLanguage !== 'en') {
-    console.warn(`Translation from ${sourceLanguage} not yet supported. Returning original text.`);
-    return text;
+  // Only support English to Hindi translation
+  if (sourceLanguage !== 'en' || targetLanguage !== 'hi') {
+    console.warn(`Translation only supports English to Hindi. Returning original text.`);
+    return { translatedText: text, method: 'unsupported' };
   }
 
   try {
@@ -54,14 +57,17 @@ export const translateText = async (
       // If backend not available, return original text
       if (response.status === 404 || response.status === 503) {
         console.warn(`Backend translation service not available. Showing original text.`);
-        return text;
+        return { translatedText: text, method: 'unavailable' };
       }
       
-      throw new Error('Translation failed');
+      throw new Error('Translation failed — try again');
     }
 
     const data = await response.json();
-    return data.translatedText || data.translation || text;
+    return {
+      translatedText: data.translatedText || data.translation || text,
+      method: data.method || 'unknown'
+    };
     
   } catch (error) {
     console.error('Translation error:', error);
@@ -71,7 +77,7 @@ export const translateText = async (
       console.warn('Backend server not reachable. Translation unavailable.');
     }
     
-    return text;
+    throw error; // Throw error so UI can show toast
   }
 };
 
@@ -79,14 +85,14 @@ export const translateText = async (
  * Translate full document data to target language
  * @param simplified - Simplified text to translate
  * @param targetLanguage - Target language
- * @returns Translated text
+ * @returns Object containing translated text and method used
  */
 export const translateDocument = async (
   simplified: string,
   targetLanguage: SupportedLanguage
-): Promise<string> => {
+): Promise<{ translatedText: string; method?: string }> => {
   if (targetLanguage === 'en') {
-    return simplified;
+    return { translatedText: simplified, method: 'passthrough' };
   }
 
   return await translateText(simplified, targetLanguage);
@@ -184,8 +190,8 @@ export const isTranslationAvailable = (
   source: SupportedLanguage,
   target: SupportedLanguage
 ): boolean => {
-  // Currently only support English to Hindi/Kannada
-  if (source === 'en' && (target === 'hi' || target === 'kn')) {
+  // Only support English to Hindi via JigsawStack
+  if (source === 'en' && target === 'hi') {
     return true;
   }
   

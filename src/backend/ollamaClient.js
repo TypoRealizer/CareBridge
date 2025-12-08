@@ -29,7 +29,7 @@ async function generate(model, prompt, options = {}) {
       temperature: options.temperature || 0.1,
       top_p: options.top_p || 0.9,
       top_k: options.top_k || 40,
-      num_predict: options.max_tokens || 800,
+      num_predict: options.max_tokens || 4096, // Increased from 800 to 4096 for full medical summaries
     }
   };
 

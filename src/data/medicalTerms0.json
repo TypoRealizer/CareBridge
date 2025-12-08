@@ -1,0 +1,850 @@
+{
+  "hypertension": {
+    "simple": "High blood pressure",
+    "explanation": "A condition where the force of blood against artery walls is too high, which can damage blood vessels and organs over time."
+  },
+  "hypotension": {
+    "simple": "Low blood pressure",
+    "explanation": "A condition where blood pressure is abnormally low, which can cause dizziness, fainting, or inadequate blood flow to organs."
+  },
+  "diabetes mellitus": {
+    "simple": "High blood sugar disease",
+    "explanation": "A chronic condition where the body cannot properly process blood sugar due to insufficient insulin production or insulin resistance."
+  },
+  "type 2 diabetes": {
+    "simple": "Adult-onset diabetes",
+    "explanation": "A form of diabetes where the body becomes resistant to insulin or doesn't produce enough insulin to maintain normal glucose levels."
+  },
+  "anemia": {
+    "simple": "Low red blood cells",
+    "explanation": "A condition where blood lacks enough healthy red blood cells to carry adequate oxygen to body tissues, causing fatigue and weakness."
+  },
+  "myocardial infarction": {
+    "simple": "Heart attack",
+    "explanation": "Occurs when blood flow to part of the heart muscle is blocked, usually by a blood clot, causing damage to the heart tissue."
+  },
+  "acute myocardial infarction": {
+    "simple": "Heart attack",
+    "explanation": "A sudden blockage of blood flow to the heart muscle, requiring immediate medical attention to prevent permanent heart damage."
+  },
+  "cerebrovascular accident": {
+    "simple": "Stroke",
+    "explanation": "Occurs when blood supply to part of the brain is interrupted or reduced, preventing brain tissue from getting oxygen and nutrients."
+  },
+  "stroke": {
+    "simple": "Brain attack",
+    "explanation": "A medical emergency where blood flow to the brain is blocked or a blood vessel bursts, causing brain cells to die."
+  },
+  "pneumonia": {
+    "simple": "Lung infection",
+    "explanation": "An infection that inflames the air sacs in one or both lungs, which may fill with fluid, causing cough, fever, and difficulty breathing."
+  },
+  "asthma": {
+    "simple": "Breathing disorder",
+    "explanation": "A chronic condition where airways narrow and swell, producing extra mucus, making breathing difficult and triggering coughing and wheezing."
+  },
+  "chronic obstructive pulmonary disease": {
+    "simple": "Chronic lung disease",
+    "explanation": "A group of progressive lung diseases that block airflow and make breathing difficult, often caused by long-term smoking."
+  },
+  "copd": {
+    "simple": "Chronic lung disease",
+    "explanation": "A progressive lung condition that makes it hard to breathe due to damaged airways and air sacs in the lungs."
+  },
+  "dyspnea": {
+    "simple": "Shortness of breath",
+    "explanation": "A feeling of difficult or labored breathing, often described as feeling unable to get enough air into the lungs."
+  },
+  "tachycardia": {
+    "simple": "Fast heartbeat",
+    "explanation": "A condition where the heart beats faster than normal while at rest, typically over 100 beats per minute in adults."
+  },
+  "bradycardia": {
+    "simple": "Slow heartbeat",
+    "explanation": "A condition where the heart beats slower than normal, typically fewer than 60 beats per minute, which may reduce blood flow to the body."
+  },
+  "arrhythmia": {
+    "simple": "Irregular heartbeat",
+    "explanation": "A condition where the heart beats with an irregular or abnormal rhythm, which can be too fast, too slow, or erratic."
+  },
+  "atrial fibrillation": {
+    "simple": "Irregular heart rhythm",
+    "explanation": "A common heart rhythm disorder where the upper chambers of the heart beat irregularly and often rapidly, increasing stroke risk."
+  },
+  "congestive heart failure": {
+    "simple": "Weak heart pump",
+    "explanation": "A chronic condition where the heart doesn't pump blood as well as it should, causing fluid buildup in the lungs and other tissues."
+  },
+  "edema": {
+    "simple": "Swelling from fluid",
+    "explanation": "Swelling caused by excess fluid trapped in body tissues, often occurring in the feet, ankles, and legs."
+  },
+  "arthritis": {
+    "simple": "Joint inflammation",
+    "explanation": "Inflammation of one or more joints causing pain, stiffness, and swelling that typically worsens with age."
+  },
+  "osteoarthritis": {
+    "simple": "Joint wear and tear",
+    "explanation": "The most common form of arthritis where the protective cartilage that cushions the ends of bones wears down over time."
+  },
+  "rheumatoid arthritis": {
+    "simple": "Autoimmune joint disease",
+    "explanation": "An autoimmune disorder where the immune system mistakenly attacks the joints, causing painful swelling and potential joint damage."
+  },
+  "fracture": {
+    "simple": "Broken bone",
+    "explanation": "A partial or complete break in a bone, usually caused by trauma, overuse, or diseases that weaken bones."
+  },
+  "laceration": {
+    "simple": "Deep cut",
+    "explanation": "A deep cut or tear in the skin or tissue, often with irregular edges, typically caused by a sharp object or trauma."
+  },
+  "contusion": {
+    "simple": "Bruise",
+    "explanation": "An injury to tissue under the skin caused by a blunt force that breaks small blood vessels, causing discoloration."
+  },
+  "hematoma": {
+    "simple": "Blood collection under skin",
+    "explanation": "A collection of blood outside of blood vessels, usually caused by an injury that damages blood vessel walls."
+  },
+  "thrombosis": {
+    "simple": "Blood clot",
+    "explanation": "The formation of a blood clot inside a blood vessel, which can obstruct blood flow and cause serious complications."
+  },
+  "embolism": {
+    "simple": "Blocked blood vessel",
+    "explanation": "A blockage of a blood vessel by a clot, air bubble, or other substance that travels through the bloodstream."
+  },
+  "pulmonary embolism": {
+    "simple": "Lung blood clot",
+    "explanation": "A blockage in one of the pulmonary arteries in the lungs, usually caused by blood clots that travel from the legs."
+  },
+  "deep vein thrombosis": {
+    "simple": "Blood clot in leg vein",
+    "explanation": "A blood clot that forms in a deep vein, usually in the legs, which can break loose and travel to the lungs."
+  },
+  "dvt": {
+    "simple": "Blood clot in leg vein",
+    "explanation": "A blood clot in a deep vein of the leg that can cause pain, swelling, and potentially life-threatening complications."
+  },
+  "sepsis": {
+    "simple": "Severe blood infection",
+    "explanation": "A life-threatening condition where the body's response to infection causes tissue damage, organ failure, and can lead to death."
+  },
+  "infection": {
+    "simple": "Germ invasion",
+    "explanation": "The invasion and multiplication of harmful microorganisms in body tissues, causing disease and immune response."
+  },
+  "inflammation": {
+    "simple": "Body's healing response",
+    "explanation": "The body's protective response to injury or infection, characterized by redness, heat, swelling, and pain."
+  },
+  "gastroenteritis": {
+    "simple": "Stomach flu",
+    "explanation": "Inflammation of the stomach and intestines, usually caused by a viral or bacterial infection, causing diarrhea and vomiting."
+  },
+  "gastritis": {
+    "simple": "Stomach lining inflammation",
+    "explanation": "Inflammation of the stomach lining that can cause pain, nausea, and vomiting, often due to infection or irritation."
+  },
+  "peptic ulcer": {
+    "simple": "Stomach or intestine sore",
+    "explanation": "An open sore that develops on the lining of the stomach or upper small intestine, causing burning pain."
+  },
+  "appendicitis": {
+    "simple": "Inflamed appendix",
+    "explanation": "Inflammation of the appendix causing severe abdominal pain, requiring surgical removal to prevent rupture."
+  },
+  "cholecystitis": {
+    "simple": "Inflamed gallbladder",
+    "explanation": "Inflammation of the gallbladder, usually caused by gallstones blocking the duct, causing severe abdominal pain."
+  },
+  "hepatitis": {
+    "simple": "Liver inflammation",
+    "explanation": "Inflammation of the liver, usually caused by viral infection, that can lead to liver damage if not treated."
+  },
+  "cirrhosis": {
+    "simple": "Liver scarring",
+    "explanation": "Late-stage liver disease where healthy liver tissue is replaced by scar tissue, permanently damaging the liver."
+  },
+  "renal failure": {
+    "simple": "Kidney failure",
+    "explanation": "A condition where the kidneys lose the ability to filter waste and excess fluids from the blood effectively."
+  },
+  "acute renal failure": {
+    "simple": "Sudden kidney failure",
+    "explanation": "A sudden loss of kidney function that develops rapidly over hours or days, potentially reversible with treatment."
+  },
+  "chronic kidney disease": {
+    "simple": "Long-term kidney damage",
+    "explanation": "Progressive loss of kidney function over time, eventually leading to kidney failure requiring dialysis or transplant."
+  },
+  "ckd": {
+    "simple": "Long-term kidney damage",
+    "explanation": "A gradual loss of kidney function that can progress to complete kidney failure over months or years."
+  },
+  "urinary tract infection": {
+    "simple": "Bladder or kidney infection",
+    "explanation": "An infection in any part of the urinary system, most commonly in the bladder, causing painful urination."
+  },
+  "uti": {
+    "simple": "Bladder infection",
+    "explanation": "An infection of the urinary system causing frequent, painful urination and sometimes fever."
+  },
+  "nephropathy": {
+    "simple": "Kidney disease",
+    "explanation": "Damage or disease of the kidneys that affects their ability to filter blood and remove waste from the body."
+  },
+  "neuropathy": {
+    "simple": "Nerve damage",
+    "explanation": "Damage to nerves causing weakness, numbness, and pain, usually in the hands and feet."
+  },
+  "peripheral neuropathy": {
+    "simple": "Nerve damage in limbs",
+    "explanation": "Damage to nerves in the extremities causing tingling, numbness, and pain in hands and feet."
+  },
+  "seizure": {
+    "simple": "Brain electrical surge",
+    "explanation": "Sudden, uncontrolled electrical disturbance in the brain that can cause changes in behavior, movements, or consciousness."
+  },
+  "epilepsy": {
+    "simple": "Seizure disorder",
+    "explanation": "A neurological disorder characterized by recurrent seizures due to abnormal electrical activity in the brain."
+  },
+  "migraine": {
+    "simple": "Severe headache",
+    "explanation": "A neurological condition causing intense, throbbing headaches often accompanied by nausea, vomiting, and light sensitivity."
+  },
+  "vertigo": {
+    "simple": "Spinning dizziness",
+    "explanation": "A sensation of spinning or moving when you are actually still, often caused by inner ear problems."
+  },
+  "syncope": {
+    "simple": "Fainting",
+    "explanation": "A temporary loss of consciousness caused by a lack of blood flow to the brain, usually brief and followed by complete recovery."
+  },
+  "dehydration": {
+    "simple": "Low body fluids",
+    "explanation": "A condition where the body loses more fluids than it takes in, causing weakness, dizziness, and decreased urine output."
+  },
+  "malnutrition": {
+    "simple": "Poor nutrition",
+    "explanation": "A condition resulting from eating a diet lacking in nutrients, or an inability to properly absorb nutrients from food."
+  },
+  "obesity": {
+    "simple": "Excessive body weight",
+    "explanation": "A condition characterized by excessive body fat that increases the risk of health problems like diabetes and heart disease."
+  },
+  "hyperlipidemia": {
+    "simple": "High cholesterol",
+    "explanation": "Abnormally high levels of fats (lipids) in the blood, increasing the risk of heart disease and stroke."
+  },
+  "hypercholesterolemia": {
+    "simple": "High cholesterol",
+    "explanation": "Elevated levels of cholesterol in the blood that can lead to plaque buildup in arteries and increase heart disease risk."
+  },
+  "hypothyroidism": {
+    "simple": "Underactive thyroid",
+    "explanation": "A condition where the thyroid gland doesn't produce enough thyroid hormone, slowing metabolism and causing fatigue."
+  },
+  "hyperthyroidism": {
+    "simple": "Overactive thyroid",
+    "explanation": "A condition where the thyroid gland produces too much thyroid hormone, speeding up metabolism and causing weight loss."
+  },
+  "goiter": {
+    "simple": "Enlarged thyroid",
+    "explanation": "Abnormal enlargement of the thyroid gland in the neck, which may cause difficulty swallowing or breathing."
+  },
+  "carcinoma": {
+    "simple": "Cancer",
+    "explanation": "A type of cancer that begins in cells that line the inner or outer surfaces of the body."
+  },
+  "malignancy": {
+    "simple": "Cancerous growth",
+    "explanation": "A cancerous tumor that can invade nearby tissues and spread to other parts of the body."
+  },
+  "benign": {
+    "simple": "Non-cancerous",
+    "explanation": "A growth that is not cancerous and does not spread to other parts of the body, though it may still require treatment."
+  },
+  "metastasis": {
+    "simple": "Cancer spread",
+    "explanation": "The spread of cancer cells from the original tumor to other parts of the body through blood or lymph systems."
+  },
+  "chemotherapy": {
+    "simple": "Cancer drug treatment",
+    "explanation": "Treatment using powerful drugs to kill cancer cells or stop them from growing and dividing."
+  },
+  "radiation therapy": {
+    "simple": "Cancer radiation treatment",
+    "explanation": "Treatment that uses high-energy radiation to shrink tumors and kill cancer cells."
+  },
+  "biopsy": {
+    "simple": "Tissue sample test",
+    "explanation": "A medical procedure where a small sample of tissue is removed and examined under a microscope to check for disease."
+  },
+  "mri": {
+    "simple": "Magnetic body scan",
+    "explanation": "A medical imaging technique that uses magnetic fields and radio waves to create detailed images of organs and tissues."
+  },
+  "ct scan": {
+    "simple": "X-ray body scan",
+    "explanation": "A computerized X-ray imaging procedure that produces cross-sectional images of the body for diagnosis."
+  },
+  "x-ray": {
+    "simple": "Radiation picture",
+    "explanation": "A quick, painless imaging test that uses electromagnetic radiation to create pictures of structures inside the body."
+  },
+  "ultrasound": {
+    "simple": "Sound wave imaging",
+    "explanation": "A safe imaging technique that uses sound waves to create pictures of internal body structures."
+  },
+  "ecg": {
+    "simple": "Heart electrical test",
+    "explanation": "A test that records the electrical activity of the heart to detect rhythm problems and heart damage."
+  },
+  "ekg": {
+    "simple": "Heart electrical test",
+    "explanation": "A test that measures the heart's electrical signals to identify irregular heartbeats and heart problems."
+  },
+  "electrocardiogram": {
+    "simple": "Heart rhythm test",
+    "explanation": "A test that records the electrical signals in the heart to detect heart problems and monitor heart health."
+  },
+  "echocardiogram": {
+    "simple": "Heart ultrasound",
+    "explanation": "An ultrasound test that uses sound waves to create moving pictures of the heart to assess its structure and function."
+  },
+  "angiogram": {
+    "simple": "Blood vessel X-ray",
+    "explanation": "An X-ray test that uses dye to visualize blood vessels and check for blockages or abnormalities."
+  },
+  "catheterization": {
+    "simple": "Tube insertion procedure",
+    "explanation": "A medical procedure where a thin tube is inserted into the body to diagnose or treat certain conditions."
+  },
+  "stent": {
+    "simple": "Artery support tube",
+    "explanation": "A small mesh tube placed in a narrowed or blocked artery to keep it open and improve blood flow."
+  },
+  "pacemaker": {
+    "simple": "Heart rhythm device",
+    "explanation": "A small device implanted in the chest to help control abnormal heart rhythms using electrical pulses."
+  },
+  "defibrillator": {
+    "simple": "Heart shock device",
+    "explanation": "A device that delivers an electric shock to the heart to restore normal rhythm during life-threatening arrhythmias."
+  },
+  "bypass surgery": {
+    "simple": "Heart artery reroute",
+    "explanation": "Surgery that creates a new path for blood to flow around a blocked artery in the heart."
+  },
+  "angioplasty": {
+    "simple": "Artery widening procedure",
+    "explanation": "A procedure to open blocked or narrowed arteries using a balloon catheter and sometimes a stent."
+  },
+  "percutaneous coronary intervention": {
+    "simple": "Artery opening procedure",
+    "explanation": "A non-surgical procedure to open blocked heart arteries using a catheter with a balloon or stent."
+  },
+  "pci": {
+    "simple": "Artery opening procedure",
+    "explanation": "A minimally invasive procedure to restore blood flow in blocked heart arteries."
+  },
+  "cabg": {
+    "simple": "Heart bypass surgery",
+    "explanation": "Surgery to improve blood flow to the heart by grafting vessels to bypass blocked arteries."
+  },
+  "dialysis": {
+    "simple": "Blood filtering treatment",
+    "explanation": "A procedure that removes waste and excess fluid from blood when kidneys can no longer perform this function."
+  },
+  "intubation": {
+    "simple": "Breathing tube insertion",
+    "explanation": "Insertion of a tube through the mouth into the airway to help a patient breathe with a ventilator."
+  },
+  "ventilation": {
+    "simple": "Mechanical breathing",
+    "explanation": "Use of a machine to help or completely control breathing when a patient cannot breathe adequately on their own."
+  },
+  "tracheostomy": {
+    "simple": "Throat breathing hole",
+    "explanation": "A surgical opening through the neck into the windpipe to help breathing when the upper airway is blocked."
+  },
+  "incision": {
+    "simple": "Surgical cut",
+    "explanation": "A cut made in the body during surgery to access internal organs or tissues."
+  },
+  "suture": {
+    "simple": "Stitches",
+    "explanation": "Medical thread or material used to close wounds or surgical incisions by sewing tissue together."
+  },
+  "staples": {
+    "simple": "Surgical clips",
+    "explanation": "Metal clips used to close surgical incisions or wounds, similar to stitches but faster to apply."
+  },
+  "drainage": {
+    "simple": "Fluid removal",
+    "explanation": "Removal of fluid from a body cavity or wound using tubes or other devices to promote healing."
+  },
+  "abscess": {
+    "simple": "Pus-filled pocket",
+    "explanation": "A collection of pus that forms within tissue due to infection, causing swelling and pain."
+  },
+  "cyst": {
+    "simple": "Fluid-filled sac",
+    "explanation": "A closed sac-like structure filled with fluid, air, or other material that can form anywhere in the body."
+  },
+  "polyp": {
+    "simple": "Tissue growth",
+    "explanation": "An abnormal growth of tissue projecting from a mucous membrane, usually benign but sometimes precancerous."
+  },
+  "lesion": {
+    "simple": "Abnormal tissue area",
+    "explanation": "Any abnormal damage or change in tissue, which can be caused by disease or trauma."
+  },
+  "nodule": {
+    "simple": "Small lump",
+    "explanation": "A small, solid lump or growth that can form in any part of the body, which may be benign or malignant."
+  },
+  "mass": {
+    "simple": "Lump or growth",
+    "explanation": "An abnormal lump or growth in the body that may be benign or cancerous and requires further evaluation."
+  },
+  "tumor": {
+    "simple": "Abnormal growth",
+    "explanation": "An abnormal growth of cells that can be benign (non-cancerous) or malignant (cancerous)."
+  },
+  "neoplasm": {
+    "simple": "New abnormal growth",
+    "explanation": "An abnormal growth of tissue that can be benign or malignant, also known as a tumor."
+  },
+  "aspiration": {
+    "simple": "Fluid or tissue removal",
+    "explanation": "A procedure to remove fluid or tissue from the body using a needle and syringe for testing or treatment."
+  },
+  "transfusion": {
+    "simple": "Blood transfer",
+    "explanation": "A procedure where blood or blood components are transferred into a patient's bloodstream through an IV."
+  },
+  "iv": {
+    "simple": "Vein injection",
+    "explanation": "Intravenous delivery of fluids, medications, or nutrients directly into a vein through a needle or catheter."
+  },
+  "intravenous": {
+    "simple": "Into the vein",
+    "explanation": "Administration of substances directly into a vein for immediate absorption into the bloodstream."
+  },
+  "subcutaneous": {
+    "simple": "Under the skin",
+    "explanation": "Injection or insertion of medication into the tissue layer between the skin and muscle."
+  },
+  "intramuscular": {
+    "simple": "Into the muscle",
+    "explanation": "Injection of medication directly into a muscle for gradual absorption into the bloodstream."
+  },
+  "oral": {
+    "simple": "By mouth",
+    "explanation": "Taking medication or substances through the mouth for absorption through the digestive system."
+  },
+  "topical": {
+    "simple": "On the skin",
+    "explanation": "Application of medication directly onto the skin for local treatment or absorption."
+  },
+  "inhalation": {
+    "simple": "Breathing in",
+    "explanation": "Taking in medication or substances through the nose or mouth into the lungs."
+  },
+  "antibiotic": {
+    "simple": "Bacteria-killing medicine",
+    "explanation": "Medication that kills bacteria or stops their growth to treat bacterial infections."
+  },
+  "antiviral": {
+    "simple": "Virus-fighting medicine",
+    "explanation": "Medication used to treat viral infections by interfering with virus reproduction."
+  },
+  "anticoagulant": {
+    "simple": "Blood thinner",
+    "explanation": "Medication that prevents blood from clotting, reducing the risk of stroke and heart attack."
+  },
+  "antiplatelet": {
+    "simple": "Clot prevention medicine",
+    "explanation": "Medication that prevents blood platelets from sticking together and forming clots."
+  },
+  "aspirin": {
+    "simple": "Pain reliever and blood thinner",
+    "explanation": "A common medication used to relieve pain, reduce inflammation, and prevent blood clots."
+  },
+  "clopidogrel": {
+    "simple": "Blood clot prevention drug",
+    "explanation": "An antiplatelet medication that prevents blood platelets from sticking together, reducing clot risk after heart procedures."
+  },
+  "warfarin": {
+    "simple": "Blood thinner",
+    "explanation": "An anticoagulant medication that slows down blood clot formation by reducing vitamin K activity."
+  },
+  "heparin": {
+    "simple": "Injectable blood thinner",
+    "explanation": "A fast-acting anticoagulant medication given by injection to prevent and treat blood clots."
+  },
+  "statin": {
+    "simple": "Cholesterol-lowering drug",
+    "explanation": "Medication that lowers cholesterol levels by blocking a substance the body needs to make cholesterol."
+  },
+  "beta-blocker": {
+    "simple": "Heart-slowing medication",
+    "explanation": "Medication that reduces heart rate and blood pressure by blocking the effects of stress hormones on the heart."
+  },
+  "ace inhibitor": {
+    "simple": "Blood pressure medication",
+    "explanation": "Medication that relaxes blood vessels and lowers blood pressure by blocking an enzyme that narrows vessels."
+  },
+  "diuretic": {
+    "simple": "Water pill",
+    "explanation": "Medication that helps the body get rid of excess water and salt through increased urination."
+  },
+  "insulin": {
+    "simple": "Blood sugar hormone",
+    "explanation": "A hormone that helps cells absorb glucose from blood, used as medication for diabetes management."
+  },
+  "metformin": {
+    "simple": "Diabetes medication",
+    "explanation": "An oral medication that lowers blood sugar by improving how the body handles insulin."
+  },
+  "steroid": {
+    "simple": "Inflammation-reducing drug",
+    "explanation": "Medication that reduces inflammation and suppresses the immune system, used for various conditions."
+  },
+  "corticosteroid": {
+    "simple": "Anti-inflammation hormone drug",
+    "explanation": "Synthetic drugs similar to cortisol that reduce inflammation and suppress immune system activity."
+  },
+  "nsaid": {
+    "simple": "Pain and swelling reducer",
+    "explanation": "Non-steroidal anti-inflammatory drugs that reduce pain, inflammation, and fever without using steroids."
+  },
+  "analgesic": {
+    "simple": "Pain reliever",
+    "explanation": "Medication designed to relieve pain without causing loss of consciousness."
+  },
+  "antipyretic": {
+    "simple": "Fever reducer",
+    "explanation": "Medication that reduces fever by lowering the body's temperature set point."
+  },
+  "sedative": {
+    "simple": "Calming medicine",
+    "explanation": "Medication that has a calming effect, reduces anxiety, and can induce sleep."
+  },
+  "anesthetic": {
+    "simple": "Numbing medicine",
+    "explanation": "Medication that causes loss of sensation or consciousness, used during surgical procedures."
+  },
+  "local anesthesia": {
+    "simple": "Numbing in one area",
+    "explanation": "Medication that blocks sensation in a specific area of the body without affecting consciousness."
+  },
+  "general anesthesia": {
+    "simple": "Complete unconsciousness",
+    "explanation": "Medication that causes complete loss of consciousness and sensation during major surgery."
+  },
+  "prognosis": {
+    "simple": "Expected outcome",
+    "explanation": "A medical prediction of the likely course and outcome of a disease or condition."
+  },
+  "diagnosis": {
+    "simple": "Disease identification",
+    "explanation": "The process of identifying a disease or condition by examining symptoms, tests, and medical history."
+  },
+  "symptom": {
+    "simple": "Sign of illness",
+    "explanation": "A physical or mental feature indicating a condition or disease, noticed by the patient."
+  },
+  "sign": {
+    "simple": "Observable indicator",
+    "explanation": "An objective indication of disease that can be observed or measured by healthcare providers."
+  },
+  "vital signs": {
+    "simple": "Basic health measurements",
+    "explanation": "Essential body measurements including temperature, pulse, breathing rate, and blood pressure."
+  },
+  "blood pressure": {
+    "simple": "Force of blood in arteries",
+    "explanation": "The pressure of circulating blood against the walls of blood vessels, measured in two numbers."
+  },
+  "pulse": {
+    "simple": "Heart rate",
+    "explanation": "The rhythmic expansion of arteries caused by heart contractions, measured in beats per minute."
+  },
+  "temperature": {
+    "simple": "Body heat level",
+    "explanation": "A measure of the body's heat, with normal being around 98.6°F (37°C)."
+  },
+  "respiration": {
+    "simple": "Breathing",
+    "explanation": "The process of breathing, including the number of breaths per minute."
+  },
+  "oxygen saturation": {
+    "simple": "Blood oxygen level",
+    "explanation": "The percentage of oxygen-carrying hemoglobin in the blood, normally 95-100%."
+  },
+  "glucose": {
+    "simple": "Blood sugar",
+    "explanation": "A simple sugar that serves as the main source of energy for the body's cells."
+  },
+  "hemoglobin": {
+    "simple": "Oxygen-carrying protein",
+    "explanation": "A protein in red blood cells that carries oxygen from the lungs to the rest of the body."
+  },
+  "platelets": {
+    "simple": "Blood clotting cells",
+    "explanation": "Small blood cells that help form clots to stop bleeding when blood vessels are injured."
+  },
+  "white blood cells": {
+    "simple": "Infection fighters",
+    "explanation": "Blood cells that protect the body against infection and disease by attacking harmful invaders."
+  },
+  "red blood cells": {
+    "simple": "Oxygen carriers",
+    "explanation": "Blood cells that contain hemoglobin and transport oxygen from lungs to body tissues."
+  },
+  "electrolytes": {
+    "simple": "Body salts and minerals",
+    "explanation": "Minerals in blood and body fluids that carry an electric charge and are essential for body functions."
+  },
+  "sodium": {
+    "simple": "Salt mineral",
+    "explanation": "An essential mineral that helps maintain fluid balance, nerve function, and muscle contractions."
+  },
+  "potassium": {
+    "simple": "Heart mineral",
+    "explanation": "An essential mineral crucial for heart function, muscle contractions, and nerve signals."
+  },
+  "creatinine": {
+    "simple": "Kidney function marker",
+    "explanation": "A waste product filtered by kidneys, measured in blood to assess kidney function."
+  },
+  "bilirubin": {
+    "simple": "Liver function marker",
+    "explanation": "A yellow compound produced when red blood cells break down, measured to assess liver function."
+  },
+  "albumin": {
+    "simple": "Blood protein",
+    "explanation": "A protein made by the liver that helps maintain fluid balance and transport substances in blood."
+  },
+  "enzyme": {
+    "simple": "Body chemical catalyst",
+    "explanation": "A protein that speeds up chemical reactions in the body, measured to diagnose various conditions."
+  },
+  "hormone": {
+    "simple": "Body messenger chemical",
+    "explanation": "A chemical produced by glands that travels through blood to regulate body functions and processes."
+  },
+  "thyroid": {
+    "simple": "Metabolism control gland",
+    "explanation": "A butterfly-shaped gland in the neck that produces hormones regulating metabolism and energy use."
+  },
+  "pancreas": {
+    "simple": "Insulin-producing organ",
+    "explanation": "An organ that produces digestive enzymes and insulin to regulate blood sugar levels."
+  },
+  "liver": {
+    "simple": "Blood filtering organ",
+    "explanation": "The largest internal organ that filters blood, processes nutrients, and removes toxins from the body."
+  },
+  "kidney": {
+    "simple": "Blood cleaning organ",
+    "explanation": "Organs that filter waste and excess fluid from blood to produce urine."
+  },
+  "spleen": {
+    "simple": "Blood filter organ",
+    "explanation": "An organ that filters blood, removes old blood cells, and helps fight infections."
+  },
+  "gallbladder": {
+    "simple": "Bile storage sac",
+    "explanation": "A small organ that stores bile produced by the liver to help digest fats."
+  },
+  "appendix": {
+    "simple": "Small intestine pouch",
+    "explanation": "A small pouch attached to the large intestine that can become inflamed and require removal."
+  },
+  "colon": {
+    "simple": "Large intestine",
+    "explanation": "The main part of the large intestine that absorbs water and forms waste products."
+  },
+  "esophagus": {
+    "simple": "Food tube",
+    "explanation": "The muscular tube that carries food from the throat to the stomach."
+  },
+  "trachea": {
+    "simple": "Windpipe",
+    "explanation": "The tube that carries air from the throat to the lungs."
+  },
+  "bronchi": {
+    "simple": "Lung airways",
+    "explanation": "The main air passages that branch from the trachea into the lungs."
+  },
+  "alveoli": {
+    "simple": "Lung air sacs",
+    "explanation": "Tiny air sacs in the lungs where oxygen and carbon dioxide are exchanged with blood."
+  },
+  "diaphragm": {
+    "simple": "Breathing muscle",
+    "explanation": "The main muscle used for breathing, located below the lungs that contracts and relaxes to move air."
+  },
+  "atrium": {
+    "simple": "Heart upper chamber",
+    "explanation": "One of the two upper chambers of the heart that receives blood from the body or lungs."
+  },
+  "ventricle": {
+    "simple": "Heart lower chamber",
+    "explanation": "One of the two lower chambers of the heart that pumps blood to the lungs or body."
+  },
+  "valve": {
+    "simple": "Blood flow door",
+    "explanation": "A structure that opens and closes to control blood flow in one direction through the heart."
+  },
+  "artery": {
+    "simple": "Blood vessel from heart",
+    "explanation": "A blood vessel that carries oxygen-rich blood away from the heart to body tissues."
+  },
+  "vein": {
+    "simple": "Blood vessel to heart",
+    "explanation": "A blood vessel that carries oxygen-poor blood back to the heart from body tissues."
+  },
+  "capillary": {
+    "simple": "Tiny blood vessel",
+    "explanation": "The smallest blood vessels where oxygen and nutrients are exchanged with body tissues."
+  },
+  "lymph": {
+    "simple": "Clear body fluid",
+    "explanation": "A clear fluid containing white blood cells that flows through the lymphatic system to fight infection."
+  },
+  "lymph node": {
+    "simple": "Infection filter gland",
+    "explanation": "Small bean-shaped organs that filter lymph fluid and produce immune cells to fight infection."
+  },
+  "immune system": {
+    "simple": "Body defense system",
+    "explanation": "The body's defense system against infections, diseases, and foreign substances."
+  },
+  "antibody": {
+    "simple": "Infection fighter protein",
+    "explanation": "A protein produced by the immune system that identifies and neutralizes harmful substances like bacteria and viruses."
+  },
+  "antigen": {
+    "simple": "Foreign invader",
+    "explanation": "A substance that triggers an immune response, usually a foreign protein from bacteria, viruses, or other sources."
+  },
+  "vaccine": {
+    "simple": "Disease prevention shot",
+    "explanation": "A substance that stimulates the immune system to produce immunity against specific diseases without causing the disease."
+  },
+  "immunity": {
+    "simple": "Disease resistance",
+    "explanation": "The ability of the body to resist infection or disease through the immune system."
+  },
+  "autoimmune": {
+    "simple": "Self-attacking immune system",
+    "explanation": "A condition where the immune system mistakenly attacks the body's own healthy tissues."
+  },
+  "allergy": {
+    "simple": "Overreaction to harmless substance",
+    "explanation": "An immune system reaction to a substance that is usually harmless, causing symptoms like sneezing or rash."
+  },
+  "anaphylaxis": {
+    "simple": "Severe allergic reaction",
+    "explanation": "A life-threatening allergic reaction that occurs rapidly and can cause difficulty breathing and shock."
+  },
+  "rash": {
+    "simple": "Skin irritation",
+    "explanation": "An area of irritated or swollen skin that may be red, itchy, or painful."
+  },
+  "dermatitis": {
+    "simple": "Skin inflammation",
+    "explanation": "Inflammation of the skin causing redness, itching, and sometimes blistering or peeling."
+  },
+  "eczema": {
+    "simple": "Itchy skin condition",
+    "explanation": "A chronic skin condition causing dry, itchy, inflamed patches of skin."
+  },
+  "psoriasis": {
+    "simple": "Scaly skin patches",
+    "explanation": "A chronic skin condition causing red, scaly patches due to rapid skin cell growth."
+  },
+  "melanoma": {
+    "simple": "Skin cancer",
+    "explanation": "The most serious type of skin cancer that develops in pigment-producing cells."
+  },
+  "jaundice": {
+    "simple": "Yellow skin from liver",
+    "explanation": "Yellowing of skin and eyes caused by high bilirubin levels, often indicating liver problems."
+  },
+  "cyanosis": {
+    "simple": "Blue skin from low oxygen",
+    "explanation": "Bluish discoloration of skin and mucous membranes due to inadequate oxygen in the blood."
+  },
+  "pallor": {
+    "simple": "Pale skin",
+    "explanation": "Unusual paleness of the skin, often indicating anemia, shock, or poor circulation."
+  },
+  "flushing": {
+    "simple": "Red skin from blood rush",
+    "explanation": "Temporary redness of the skin caused by increased blood flow, often from heat, emotion, or fever."
+  },
+  "fever": {
+    "simple": "High body temperature",
+    "explanation": "Elevated body temperature above normal, usually indicating infection or illness."
+  },
+  "chills": {
+    "simple": "Shivering from cold",
+    "explanation": "A feeling of being cold with shivering, often accompanying fever or illness."
+  },
+  "nausea": {
+    "simple": "Feeling sick to stomach",
+    "explanation": "An uncomfortable sensation of wanting to vomit, often accompanied by stomach upset."
+  },
+  "vomiting": {
+    "simple": "Throwing up",
+    "explanation": "The forceful expulsion of stomach contents through the mouth."
+  },
+  "diarrhea": {
+    "simple": "Loose watery stools",
+    "explanation": "Frequent passage of loose, watery bowel movements, often caused by infection or digestive issues."
+  },
+  "constipation": {
+    "simple": "Difficulty passing stool",
+    "explanation": "Infrequent or difficult passage of hard, dry bowel movements."
+  },
+  "incontinence": {
+    "simple": "Loss of bladder control",
+    "explanation": "Inability to control urination or bowel movements, leading to involuntary leakage."
+  },
+  "hematuria": {
+    "simple": "Blood in urine",
+    "explanation": "The presence of blood in urine, which may indicate infection, kidney stones, or other conditions."
+  },
+  "hemoptysis": {
+    "simple": "Coughing up blood",
+    "explanation": "Coughing up blood from the lungs or airways, which requires medical evaluation."
+  },
+  "hematemesis": {
+    "simple": "Vomiting blood",
+    "explanation": "Vomiting blood, which may indicate bleeding in the upper digestive tract."
+  },
+  "melena": {
+    "simple": "Black tarry stool",
+    "explanation": "Dark, tar-like stools caused by digested blood, indicating bleeding in the upper digestive system."
+  },
+  "ascites": {
+    "simple": "Fluid in belly",
+    "explanation": "Abnormal accumulation of fluid in the abdominal cavity, often due to liver disease or cancer."
+  },
+  "pleural effusion": {
+    "simple": "Fluid around lungs",
+    "explanation": "Excess fluid buildup between the layers of tissue lining the lungs and chest cavity."
+  },
+  "pericardial effusion": {
+    "simple": "Fluid around heart",
+    "explanation": "Abnormal accumulation of fluid in the sac surrounding the heart, which can affect heart function."
+  }
+}

@@ -1,21 +1,35 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Download, Volume2, VolumeX, CheckCircle2, AlertCircle, Info, Search, Pill, Calendar, Activity, Utensils, Heart, FileText, Globe } from 'lucide-react';
-import { Button } from './ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Badge } from './ui/badge';
-import { Progress } from './ui/progress';
-import { Input } from './ui/input';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
-import { Alert, AlertDescription } from './ui/alert';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import MedicalTermModal from './MedicalTermModal';
 import { motion } from 'motion/react';
+import { Button } from './ui/button';
+import { Progress } from './ui/progress';
+import { Badge } from './ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Alert, AlertDescription } from './ui/alert';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
+import { Input } from './ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { 
+  CheckCircle2, 
+  Volume2, 
+  VolumeX, 
+  Download, 
+  FileText, 
+  Info, 
+  Search,
+  AlertCircle,
+  Globe,
+  Pill,
+  Calendar,
+  Activity,
+  Utensils,
+  Heart
+} from 'lucide-react';
+import MedicalTermModal from './MedicalTermModal';
 import Footer from './Footer';
-import { ResultsPageProps } from '../types';
-import { translateText } from '../services/translationService';
-import { toast } from 'sonner@2.0.3';
+import { ResultsPageProps, FAQ, CareGuidanceItem } from '../types';
 import { loadMedicalTermsGlossary, explainMedicalTerm } from '../services/medicalTermsService';
+import { toast } from 'sonner@2.0.3';
 
 interface SelectedTermData {
   term: string;
@@ -34,7 +48,19 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
   const [translatedText, setTranslatedText] = useState<string>('');
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
   const [medicalGlossary, setMedicalGlossary] = useState<{ [key: string]: { simple: string; explanation: string } }>({});
-
+  const [showOriginal, setShowOriginal] = useState<boolean>(false);
+  const [translatedCareGuidance, setTranslatedCareGuidance] = useState<CareGuidanceItem[]>([]);
+  const [translatedFaqs, setTranslatedFaqs] = useState<FAQ[]>([]);
+  const [translationMethod, setTranslationMethod] = useState<string>('');
+  // ✅ ADD: Translation cache to prevent re-translating
+  const [translationCache, setTranslationCache] = useState<{
+    [key: string]: {
+      summary: string;
+      careGuidance: CareGuidanceItem[];
+      faqs: FAQ[];
+      method: string;
+    }
+  }>({});
 
   useEffect(() => {
     if (!documentData) {
@@ -62,34 +88,133 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
     loadGlossary();
   }, []);
 
-  // Handle language translation
+  // Handle language translation for summary, care guidance, and FAQs
   useEffect(() => {
     const performTranslation = async () => {
       if (!documentData) return;
       
+      // ✅ English: No translation needed
       if (selectedLanguage === 'en') {
         setTranslatedText(documentData.simplified);
+        setTranslatedCareGuidance(careGuidance);
+        setTranslatedFaqs(faqs);
+        setShowOriginal(false);
+        return;
+      }
+
+      // ✅ Check cache first (prevent retranslation)
+      const cacheKey = `${selectedLanguage}_${documentData.simplified.substring(0, 100)}`;
+      if (translationCache[cacheKey]) {
+        console.log(`[Translation] Using cached translation for ${selectedLanguage}`);
+        setTranslatedText(translationCache[cacheKey].summary);
+        setTranslatedCareGuidance(translationCache[cacheKey].careGuidance);
+        setTranslatedFaqs(translationCache[cacheKey].faqs);
+        setTranslationMethod(translationCache[cacheKey].method);
+        setShowOriginal(false);
         return;
       }
 
       setIsTranslating(true);
+      const translationStartTime = Date.now();
+      
       try {
-        const translated = await translateText(
-          documentData.simplified,
-          selectedLanguage as 'en' | 'hi' | 'kn'
-        );
-        setTranslatedText(translated);
+        console.log(`[Translation] Starting translation to ${selectedLanguage}...`);
+        
+        // ✅ OPTIMIZATION: Combine ALL texts into a SINGLE batch API call
+        // Instead of 3 separate calls (summary, care guidance, FAQs)
+        const textsToTranslate: string[] = [];
+        
+        // 1. Add summary
+        textsToTranslate.push(documentData.simplified);
+        
+        // 2. Add care guidance (title + description for each)
+        careGuidance.forEach(item => {
+          textsToTranslate.push(item.title);
+          textsToTranslate.push(item.description);
+        });
+        
+        // 3. Add FAQs (question + answer + additionalInfo if present)
+        const faqHasAdditionalInfo: boolean[] = [];
+        faqs.forEach(faq => {
+          textsToTranslate.push(faq.question);
+          textsToTranslate.push(faq.answer);
+          if (faq.additionalInfo && faq.additionalInfo.trim() !== '') {
+            textsToTranslate.push(faq.additionalInfo);
+            faqHasAdditionalInfo.push(true);
+          } else {
+            faqHasAdditionalInfo.push(false);
+          }
+        });
+        
+        console.log(`[Translation] Translating ${textsToTranslate.length} texts in ONE batch call...`);
+        
+        // ✅ ONE API CALL for everything
+        const { translateBatch } = await import('../services/batchTranslationService');
+        const result = await translateBatch(textsToTranslate, selectedLanguage as 'en' | 'hi');
+        
+        let translationIndex = 0;
+        
+        // 1. Extract summary translation
+        const translatedSummary = result.translatedTexts[translationIndex++];
+        
+        // 2. Extract care guidance translations
+        const translatedGuidance = careGuidance.map(item => ({
+          ...item,
+          title: result.translatedTexts[translationIndex++],
+          description: result.translatedTexts[translationIndex++],
+        }));
+        
+        // 3. Extract FAQ translations
+        const translatedFaqList = faqs.map((faq, index) => {
+          const question = result.translatedTexts[translationIndex++];
+          const answer = result.translatedTexts[translationIndex++];
+          const additionalInfo = faqHasAdditionalInfo[index]
+            ? result.translatedTexts[translationIndex++]
+            : faq.additionalInfo;
+          
+          return {
+            ...faq,
+            question,
+            answer,
+            additionalInfo,
+          };
+        });
+        
+        // ✅ Update state
+        setTranslatedText(translatedSummary);
+        setTranslatedCareGuidance(translatedGuidance);
+        setTranslatedFaqs(translatedFaqList);
+        setTranslationMethod(result.method);
+        setShowOriginal(false);
+        
+        // ✅ Cache the results
+        setTranslationCache(prev => ({
+          ...prev,
+          [cacheKey]: {
+            summary: translatedSummary,
+            careGuidance: translatedGuidance,
+            faqs: translatedFaqList,
+            method: result.method,
+          }
+        }));
+        
+        const duration = Date.now() - translationStartTime;
+        console.log(`[Translation] ✅ Completed in ${duration}ms using ${result.method}`);
+        console.log(`[Translation] 📊 Stats: ${result.count} texts, ${result.originalTotalLength} → ${result.translatedTotalLength} chars`);
+        
       } catch (error) {
-        console.error('Translation error:', error);
-        toast.error('Translation failed. Showing original text.');
+        console.error('[Translation] ❌ Error:', error);
+        toast.error('Translation failed — showing original English');
         setTranslatedText(documentData.simplified);
+        setTranslatedCareGuidance(careGuidance);
+        setTranslatedFaqs(faqs);
       } finally {
         setIsTranslating(false);
       }
     };
 
     performTranslation();
-  }, [selectedLanguage, documentData]);
+  }, [selectedLanguage]); // ✅ ONLY selectedLanguage dependency (not documentData!)
 
   if (!documentData) {
     return null;
@@ -192,7 +317,10 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
     }
   ];
 
-  const filteredFaqs = faqs.filter(faq =>
+  // Use translated FAQs when language is Hindi and not showing original
+  const displayFaqs = selectedLanguage === 'hi' && !showOriginal ? translatedFaqs : faqs;
+  
+  const filteredFaqs = displayFaqs.filter(faq =>
     faq.question.toLowerCase().includes(searchQuery.toLowerCase()) ||
     faq.answer.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -203,31 +331,33 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
     );
   };
 
-   const handleTermClick = async (term: string) => {
-    try {
-      console.log('[ResultsPage] Explaining term:', term);
-      
-      // Show loading state
+  const handleTermClick = async (term: string, simplified: string) => {
+    // First check if we have it in the loaded glossary
+    const termLower = term.toLowerCase();
+    if (medicalGlossary[termLower]) {
       setSelectedTerm({
         term,
-        simplified: 'Loading...',
-        explanation: 'Please wait while we fetch the explanation...'
+        simplified: medicalGlossary[termLower].simple,
+        explanation: medicalGlossary[termLower].explanation
       });
-      
-      // Get explanation from medical terms service
-      const termData = await explainMedicalTerm(term);
-      
+      return;
+    }
+    
+    // If not in glossary, try to get explanation from backend
+    try {
+      const explanation = await explainMedicalTerm(term);
       setSelectedTerm({
         term,
-        simplified: termData.simple,
-        explanation: termData.explanation
+        simplified: explanation.simple || simplified,
+        explanation: explanation.explanation || 'This is a medical term. Please consult your healthcare provider for more information.'
       });
     } catch (error) {
-      console.error('[ResultsPage] Error explaining term:', error);
+      console.error('[ResultsPage] Failed to fetch term explanation:', error);
+      // Fallback to simplified text only
       setSelectedTerm({
         term,
-        simplified: term,
-        explanation: 'Unable to load explanation at this time. Please consult your healthcare provider for more information.'
+        simplified,
+        explanation: 'This is a medical term. Please consult your healthcare provider for more information.'
       });
     }
   };
@@ -239,26 +369,47 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       return <div>{String(text)}</div>;
     }
     
-    // CRITICAL CHANGE: Only highlight terms in the ORIGINAL text
-    // Simplified text should NOT have highlighting (per requirements)
-    if (!isOriginal) {
-      return <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">{text}</div>;
+    // Combine terms from both document extraction and medical glossary
+    const allTerms: { [key: string]: string } = {};
+    
+    // Add document-specific terms (from backend extraction)
+    if (documentData.terms) {
+      Object.entries(documentData.terms).forEach(([term, simple]) => {
+        allTerms[term.toLowerCase()] = simple;
+      });
     }
     
-    // Use loaded glossary instead of documentData.terms
-    let result = text;
-    const terms = Object.keys(medicalGlossary);
+    // Add all terms from medical glossary (616 terms)
+    Object.entries(medicalGlossary).forEach(([term, data]) => {
+      const termLower = term.toLowerCase();
+      // Only add if not already present (document terms take precedence)
+      if (!allTerms[termLower]) {
+        allTerms[termLower] = data.simple;
+      }
+    });
     
-    terms.forEach(term => {
-      const regex = new RegExp(`\\b${term}\\b`, 'gi');
-      // Always use red highlight for original text medical terms
+    console.log(`[Highlighting] Using ${Object.keys(allTerms).length} terms (${Object.keys(documentData.terms || {}).length} from doc + ${Object.keys(medicalGlossary).length} from glossary)`);
+    
+    // Sort terms by length (longest first) to avoid partial matches
+    const sortedTerms = Object.keys(allTerms).sort((a, b) => b.length - a.length);
+    
+    let result = text;
+    const bgColor = isOriginal ? 'bg-red-100' : 'bg-green-100';
+    const textColor = isOriginal ? 'text-red-600' : 'text-green-600';
+    
+    // Replace each term with highlighted version
+    sortedTerms.forEach(term => {
+      const simplified = allTerms[term];
+      // Use word boundaries and case-insensitive matching
+      const regex = new RegExp(`\\b(${term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})\\b`, 'gi');
+      
       result = result.replace(
         regex,
-        `<span class="medical-term bg-red-100 text-red-700 px-1.5 py-0.5 rounded cursor-pointer hover:bg-red-200 hover:shadow-lg transition-all font-medium" data-term="${term}">${term}</span>`
+        (match) => `<span class="medical-term ${bgColor} ${textColor} px-1 rounded cursor-pointer hover:shadow-md transition-shadow" data-term="${match}" data-simplified="${simplified}">${match}</span>`
       );
     });
 
-    return <div className="prose prose-sm max-w-none whitespace-pre-wrap" dangerouslySetInnerHTML={{ __html: result }} />;
+    return <div dangerouslySetInnerHTML={{ __html: result }} />;
   };
 
   useEffect(() => {
@@ -267,8 +418,8 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       if (target.classList.contains('medical-term')) {
         const term = target.dataset.term;
         const simplified = target.dataset.simplified;
-        if (term) {
-          handleTermClick(term);
+        if (term && simplified) {
+          handleTermClick(term, simplified);
         }
       }
     };
@@ -282,7 +433,10 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       window.speechSynthesis.cancel();
       setIsPlaying(false);
     } else {
-      const textToSpeak = translatedText || documentData.simplified;
+      // Use original English if showing original, otherwise use translated text
+      const textToSpeak = (selectedLanguage === 'hi' && !showOriginal) 
+        ? (translatedText || documentData.simplified)
+        : documentData.simplified;
       
       // 🔴 CRITICAL: Limit TTS text length to prevent browser crashes
       const MAX_TTS_LENGTH = 5000; // 5000 characters max for TTS
@@ -294,10 +448,8 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
       
       // Set language for speech synthesis
-      if (selectedLanguage === 'hi') {
+      if (selectedLanguage === 'hi' && !showOriginal) {
         utterance.lang = 'hi-IN';
-      } else if (selectedLanguage === 'kn') {
-        utterance.lang = 'kn-IN';
       } else {
         utterance.lang = 'en-US';
       }
@@ -314,8 +466,11 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
   };
 
   const handleDownload = () => {
-    const textToDownload = translatedText || documentData.simplified;
-    const languageLabel = selectedLanguage === 'hi' ? 'Hindi' : selectedLanguage === 'kn' ? 'Kannada' : 'English';
+    // Use original English if showing original, otherwise use translated text
+    const textToDownload = (selectedLanguage === 'hi' && !showOriginal)
+      ? (translatedText || documentData.simplified)
+      : documentData.simplified;
+    const languageLabel = (selectedLanguage === 'hi' && !showOriginal) ? 'Hindi' : 'English';
     
     const content = `
 CAREBRIDGE - SIMPLIFIED MEDICAL DOCUMENT
@@ -351,27 +506,56 @@ This document is for educational purposes only.
         <motion.div
           className="absolute top-0 right-0 w-32 h-32 bg-teal-300 rounded-full blur-3xl opacity-10 group-hover:opacity-20 transition-opacity"
         />
-        <div className="flex items-center justify-between flex-wrap gap-4 relative z-10">
-          <div className="flex items-center space-x-3">
-            <motion.div
-              whileHover={{ rotate: 360 }}
-              transition={{ duration: 0.6 }}
-              className="bg-gradient-to-br from-teal-500 to-blue-500 p-2.5 rounded-xl shadow-lg"
-            >
-              <Globe className="h-5 w-5 text-white" />
-            </motion.div>
-            <h3 className="text-gray-900 font-heading" style={{ fontWeight: 700 }}>Output Language</h3>
+        <div className="space-y-4 relative z-10">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center space-x-3">
+              <motion.div
+                whileHover={{ rotate: 360 }}
+                transition={{ duration: 0.6 }}
+                className="bg-gradient-to-br from-teal-500 to-blue-500 p-2.5 rounded-xl shadow-lg"
+              >
+                <Globe className="h-5 w-5 text-white" />
+              </motion.div>
+              <div>
+                <h3 className="text-gray-900 font-heading" style={{ fontWeight: 700 }}>Output Language</h3>
+                {selectedLanguage === 'hi' && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-orange-600 text-sm">🇮🇳 हिंदी Active</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <Select 
+                value={selectedLanguage} 
+                onValueChange={setSelectedLanguage}
+                disabled={isTranslating}
+              >
+                <SelectTrigger className="w-full md:w-64 bg-white/90 backdrop-blur-sm border-2 hover:border-teal-400 transition-colors shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                  <SelectValue placeholder="Select language" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">🇺🇸 English</SelectItem>
+                  <SelectItem value="hi">🇮🇳 हिंदी (Hindi)</SelectItem>
+                </SelectContent>
+              </Select>
+              {isTranslating && (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-teal-500"></div>
+                  <span className="text-sm text-gray-600">Translating...</span>
+                </div>
+              )}
+            </div>
           </div>
-          <Select value={selectedLanguage} onValueChange={setSelectedLanguage}>
-            <SelectTrigger className="w-full md:w-64 bg-white/90 backdrop-blur-sm border-2 hover:border-teal-400 transition-colors shadow-md">
-              <SelectValue placeholder="Select language" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">🇺🇸 English</SelectItem>
-              <SelectItem value="hi">🇮🇳 हिंदी (Hindi)</SelectItem>
-              <SelectItem value="kn">🇮🇳 ಕನ್ನಡ (Kannada)</SelectItem>
-            </SelectContent>
-          </Select>
+          
+          {/* Powered by JigsawStack hint */}
+          {selectedLanguage === 'hi' && (
+            <div className="text-xs text-gray-500 flex items-center gap-2">
+              {translationMethod === 'jigsawstack' && <span>Powered by JigsawStack Translation API</span>}
+              {translationMethod === 'ollama' && <span>Powered by Ollama AI (Local Processing)</span>}
+              {!translationMethod && <span>Powered by JigsawStack Translation API</span>}
+            </div>
+          )}
         </div>
       </motion.div>
 
@@ -483,7 +667,7 @@ This document is for educational purposes only.
             <Alert className="glass-card bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 shadow-lg">
               <Info className="h-6 w-6 text-green-600" />
               <AlertDescription className="text-green-800">
-                <strong>How to Use This View:</strong> Click on any highlighted medical term in the original text (left panel) to see detailed definitions and explanations. The simplified text (right panel) uses plain language with no medical jargon.
+                <strong>How to Use This View:</strong> Click on any highlighted medical term in the original text or simplified explanation to see detailed definitions and explanations.
               </AlertDescription>
             </Alert>
           </motion.div>
@@ -520,21 +704,43 @@ This document is for educational purposes only.
                 <motion.div
                   className="absolute inset-0 bg-white opacity-10 shimmer"
                 />
-                <div className="flex items-center justify-between relative z-10">
+                <div className="flex items-center justify-between relative z-10 flex-wrap gap-2">
                   <h3 className="text-white text-xl">Simplified for You</h3>
-                  <motion.div
-                    animate={{
-                      scale: [1, 1.1, 1],
-                    }}
-                    transition={{
-                      duration: 2,
-                      repeat: Infinity,
-                      ease: 'easeInOut',
-                    }}
-                    className="bg-white/20 px-3 py-1 rounded-full text-white text-sm backdrop-blur-sm"
-                  >
-                    ✨ AI Enhanced
-                  </motion.div>
+                  <div className="flex items-center gap-2">
+                    {selectedLanguage === 'hi' && !showOriginal && (
+                      <Button
+                        onClick={() => setShowOriginal(true)}
+                        variant="outline"
+                        size="sm"
+                        className="bg-white/20 text-white border-white/30 hover:bg-white/30 hover:text-white text-xs"
+                      >
+                        View Original (English)
+                      </Button>
+                    )}
+                    {selectedLanguage === 'hi' && showOriginal && (
+                      <Button
+                        onClick={() => setShowOriginal(false)}
+                        variant="outline"
+                        size="sm"
+                        className="bg-white/20 text-white border-white/30 hover:bg-white/30 hover:text-white text-xs"
+                      >
+                        View हिंदी Translation
+                      </Button>
+                    )}
+                    <motion.div
+                      animate={{
+                        scale: [1, 1.1, 1],
+                      }}
+                      transition={{
+                        duration: 2,
+                        repeat: Infinity,
+                        ease: 'easeInOut',
+                      }}
+                      className="bg-white/20 px-3 py-1 rounded-full text-white text-sm backdrop-blur-sm"
+                    >
+                      ✨ AI Enhanced
+                    </motion.div>
+                  </div>
                 </div>
               </div>
               <div className="p-8 bg-gradient-to-br from-teal-50/50 to-white max-h-[800px] overflow-y-auto">
@@ -546,8 +752,23 @@ This document is for educational purposes only.
                     </div>
                   </div>
                 ) : (
-                  <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">
-                    {selectedLanguage === 'en' ? <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">{documentData.simplified}</div> : <div>{translatedText || documentData.simplified}</div>}
+                  <div className="space-y-4">
+                    <div className="prose prose-lg max-w-none whitespace-pre-wrap leading-relaxed">
+                      {selectedLanguage === 'en' || showOriginal 
+                        ? highlightTerms(documentData.simplified, false) 
+                        : <div>{translatedText || documentData.simplified}</div>
+                      }
+                    </div>
+                    
+                    {/* Warning note for translated text */}
+                    {selectedLanguage === 'hi' && !showOriginal && (
+                      <Alert className="border-amber-200 bg-amber-50/50">
+                        <AlertCircle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800 text-sm">
+                          <strong>AI translation</strong> — verify medication names with a clinician.
+                        </AlertDescription>
+                      </Alert>
+                    )}
                   </div>
                 )}
               </div>
@@ -649,7 +870,7 @@ This document is for educational purposes only.
 
           {/* Care Items */}
           <div className="space-y-5">
-            {careGuidance.map((item, index) => {
+            {(selectedLanguage === 'hi' && !showOriginal ? translatedCareGuidance : careGuidance).map((item, index) => {
               const Icon = item.icon;
               const isCompleted = completedTasks.includes(item.id);
               

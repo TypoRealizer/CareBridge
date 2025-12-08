@@ -15,13 +15,22 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const ollamaClient = require('./ollamaClient');
+const axios = require('axios');
 const prompts = require('./prompts');
 const utils = require('./utils');
+const ollamaClient = require('./ollamaClient');
+const postProcess = require('./postProcessSummary');
+const documentParser = require('./documentParser');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'mistral';
+const JIGSAWSTACK_API_KEY = process.env.JIGSAWSTACK_API_KEY || '';
+const TRANSLATION_MAX_LENGTH = parseInt(process.env.TRANSLATION_MAX_LENGTH) || 10000;
+const TRANSLATION_TIMEOUT = parseInt(process.env.TRANSLATION_TIMEOUT) || 15000;
+
+// 🔧 Increased concurrency limit for translation workload
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 10; // Increased from 3 to 10
 
 // Middleware
 app.use(cors());
@@ -40,7 +49,6 @@ app.use((req, res, next) => {
 
 // Concurrency control
 let activeRequests = 0;
-const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REQUESTS || '3');
 
 function checkConcurrency(req, res, next) {
   if (activeRequests >= MAX_CONCURRENT) {
@@ -60,6 +68,15 @@ function checkConcurrency(req, res, next) {
 // ============================================
 // HEALTH CHECK
 // ============================================
+
+// Logging helpers
+function logInfo(message, ...args) {
+  console.log(`[INFO] ${message}`, ...args);
+}
+
+function logError(message, ...args) {
+  console.error(`[ERROR] ${message}`, ...args);
+}
 
 app.get('/health', async (req, res) => {
   try {
@@ -128,6 +145,10 @@ app.post('/api/summarize', checkConcurrency, async (req, res) => {
 
     console.log(`[Summarize] Processing text: ${sanitizedText.length} chars`);
 
+    // ✅ PRE-PARSE: Extract structured data from original document
+    console.log('[Summarize] Pre-parsing document for structured data extraction...');
+    const parsedData = documentParser.parseDischargeDocument(sanitizedText);
+
     let summary;
     let tokensConsumed = 0;
 
@@ -146,12 +167,12 @@ app.post('/api/summarize', checkConcurrency, async (req, res) => {
       const chunkSummaries = [];
       
       for (let i = 0; i < chunks.length; i++) {
-        console.log(`[Summarize] Processing chunk ${i + 1}/${chunks.length}`);
+        console.log(`[Summarize] Processing chunk ${i + 1}/${chunks.length}...`);
         
         const chunkPrompt = prompts.getSummarizationPrompt(chunks[i], true);
         const response = await ollamaClient.generate(OLLAMA_MODEL, chunkPrompt, {
           temperature: 0.1,
-          max_tokens: 500
+          max_tokens: 2048  // Increased from 500 to 2048 for detailed chunk summaries
         });
 
         chunkSummaries.push(response.response);
@@ -163,7 +184,7 @@ app.post('/api/summarize', checkConcurrency, async (req, res) => {
       const synthesisPrompt = prompts.getFinalSynthesisPrompt(chunkSummaries.join('\n\n---\n\n'));
       const finalResponse = await ollamaClient.generate(OLLAMA_MODEL, synthesisPrompt, {
         temperature: 0.1,
-        max_tokens: 1000
+        max_tokens: 4096  // Increased from 1000 to 4096 for complete final summaries
       });
 
       summary = finalResponse.response;
@@ -176,11 +197,21 @@ app.post('/api/summarize', checkConcurrency, async (req, res) => {
       const prompt = prompts.getSummarizationPrompt(sanitizedText, false);
       const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
         temperature: 0.1,
-        max_tokens: 800
+        max_tokens: 4096  // Increased from 800 to 4096 for complete single-document summaries
       });
 
       summary = response.response;
       tokensConsumed = response.eval_count || 0;
+    }
+
+    // ✅ POST-PROCESS: Fix section structure issues
+    console.log('[Summarize] Post-processing summary...');
+    summary = postProcess.postProcessSummary(summary);
+
+    // ✅ MERGE: Inject accurate structured data from parser
+    if (parsedData.hasStructuredData) {
+      console.log('[Summarize] Merging parsed structured data...');
+      summary = documentParser.mergeWithAISummary(summary, parsedData);
     }
 
     // Calculate confidence
@@ -426,80 +457,299 @@ app.post('/api/faqs', checkConcurrency, async (req, res) => {
 });
 
 // ============================================
-// TRANSLATION ENDPOINT
+// 6. TRANSLATION ENDPOINT
 // ============================================
 
-app.post('/api/translate', checkConcurrency, async (req, res) => {
+/**
+ * POST /api/translate
+ * Translates text from English to Hindi using JigsawStack API or Ollama fallback
+ */
+app.post('/api/translate', async (req, res) => {
   const startTime = Date.now();
-
+  
   try {
-    const { text, lang } = req.body;
-
+    const { text, targetLanguage = 'hi' } = req.body;
+    
+    // Validation
     if (!text || typeof text !== 'string') {
-      return res.status(400).json({
-        error: 'Invalid request',
-        message: 'Text is required'
+      return res.status(400).json({ 
+        error: 'Text is required and must be a string' 
       });
     }
-
-    // 🔴 CRITICAL: Limit translation text length
-    if (text.length > 15000) {
-      return res.status(413).json({
-        error: 'Text too long for translation',
-        message: 'Text exceeds 15,000 characters. Please translate in smaller chunks.'
+    
+    if (text.length > TRANSLATION_MAX_LENGTH) {
+      return res.status(400).json({ 
+        error: `Text exceeds maximum length of ${TRANSLATION_MAX_LENGTH} characters` 
       });
     }
-
-    if (!lang || !['hi', 'kn', 'en'].includes(lang)) {
-      return res.status(400).json({
-        error: 'Invalid language',
-        message: 'Language must be one of: hi, kn, en'
+    
+    if (targetLanguage !== 'hi') {
+      return res.status(400).json({ 
+        error: 'Only Hindi (hi) translation is currently supported' 
       });
     }
-
-    // If target is English, return as-is
-    if (lang === 'en') {
-      return res.json({
-        translatedText: text,
-        targetLanguage: 'en'
-      });
+    
+    logInfo(`[Translation] Request for ${text.length} chars to ${targetLanguage}`);
+    
+    let translatedText = '';
+    let method = 'unknown';
+    
+    // Try JigsawStack API first if configured
+    if (JIGSAWSTACK_API_KEY) {
+      try {
+        logInfo('[Translation] Using JigsawStack API');
+        
+        const response = await axios.post(
+          'https://api.jigsawstack.com/v1/ai/translate',
+          {
+            text: text,
+            target_language: targetLanguage
+          },
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': JIGSAWSTACK_API_KEY
+            },
+            timeout: TRANSLATION_TIMEOUT
+          }
+        );
+        
+        if (response.data && response.data.translated_text) {
+          translatedText = response.data.translated_text;
+          method = 'jigsawstack';
+          logInfo(`[Translation] JigsawStack success in ${Date.now() - startTime}ms`);
+        } else {
+          throw new Error('Invalid response from JigsawStack API');
+        }
+      } catch (apiError) {
+        logError('[Translation] JigsawStack API failed, falling back to Ollama', apiError.message);
+        
+        // Fallback to Ollama
+        translatedText = await translateWithOllama(text, targetLanguage);
+        method = 'ollama';
+      }
+    } else {
+      // No API key configured, use Ollama
+      logInfo('[Translation] Using Ollama (no JigsawStack API key)');
+      translatedText = await translateWithOllama(text, targetLanguage);
+      method = 'ollama';
     }
-
-    console.log(`[Translate] Translating to ${lang}`);
-
-    const prompt = prompts.getTranslationPrompt(text, lang);
-    const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
-      temperature: 0.3, // Lower temp for more accurate translation
-      max_tokens: 1500
-    });
-
-    console.log(`[Translate] Translation complete`);
-
+    
+    const duration = Date.now() - startTime;
+    logInfo(`[Translation] Completed in ${duration}ms using ${method}`);
+    
     res.json({
-      translatedText: response.response,
-      targetLanguage: lang,
-      processingTime: Date.now() - startTime
+      translatedText,
+      method,
+      duration,
+      originalLength: text.length,
+      translatedLength: translatedText.length
     });
-
+    
   } catch (error) {
-    console.error('[Translate] Error:', error);
-
-    // Handle timeout
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      return res.status(504).json({
-        error: 'translation_timeout',
-        message: 'Translation took too long.',
-        originalText: req.body.text // Fallback to original
-      });
-    }
-
-    res.status(500).json({
-      error: 'translation_error',
-      message: error.message,
-      originalText: req.body.text // Fallback to original
+    logError('[Translation] Error:', error);
+    res.status(500).json({ 
+      error: 'Translation failed',
+      details: error.message 
     });
   }
 });
+
+/**
+ * POST /api/translate-batch
+ * Translates multiple texts in a single request (OPTIMIZED for efficiency)
+ */
+app.post('/api/translate-batch', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { texts, targetLanguage = 'hi' } = req.body;
+    
+    // Validation
+    if (!Array.isArray(texts)) {
+      return res.status(400).json({ 
+        error: 'texts must be an array' 
+      });
+    }
+    
+    if (texts.length === 0) {
+      return res.status(400).json({ 
+        error: 'texts array cannot be empty' 
+      });
+    }
+    
+    if (texts.length > 50) {
+      return res.status(400).json({ 
+        error: 'Maximum 50 texts per batch' 
+      });
+    }
+    
+    // Validate each text
+    for (let i = 0; i < texts.length; i++) {
+      if (typeof texts[i] !== 'string') {
+        return res.status(400).json({ 
+          error: `Text at index ${i} must be a string` 
+        });
+      }
+      if (texts[i].length > TRANSLATION_MAX_LENGTH) {
+        return res.status(400).json({ 
+          error: `Text at index ${i} exceeds maximum length of ${TRANSLATION_MAX_LENGTH} characters` 
+        });
+      }
+    }
+    
+    if (targetLanguage !== 'hi') {
+      return res.status(400).json({ 
+        error: 'Only Hindi (hi) translation is currently supported' 
+      });
+    }
+    
+    logInfo(`[Batch Translation] Request for ${texts.length} texts (${texts.reduce((sum, t) => sum + t.length, 0)} total chars)`);
+    
+    let translatedTexts = [];
+    let method = 'unknown';
+    
+    // Try JigsawStack API first if configured
+    if (JIGSAWSTACK_API_KEY) {
+      try {
+        logInfo('[Batch Translation] Using JigsawStack API');
+        
+        // ✅ FIX: Retry logic with exponential backoff
+        const translateWithRetry = async (text, retries = 3) => {
+          for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+              const response = await axios.post(
+                'https://api.jigsawstack.com/v1/ai/translate',
+                {
+                  text: text,
+                  target_language: targetLanguage
+                },
+                {
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': JIGSAWSTACK_API_KEY
+                  },
+                  timeout: TRANSLATION_TIMEOUT * 2 // Increase timeout to 60s
+                }
+              );
+              
+              if (response.data && response.data.translated_text) {
+                return response.data.translated_text;
+              }
+              throw new Error('Invalid response from JigsawStack API');
+            } catch (err) {
+              const isLastAttempt = attempt === retries;
+              
+              // Check for rate limiting (429) or server errors (500, 502, 503)
+              const shouldRetry = err.response?.status === 429 || 
+                                  err.response?.status >= 500 || 
+                                  err.code === 'ECONNABORTED';
+              
+              if (shouldRetry && !isLastAttempt) {
+                const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                logInfo(`[Batch Translation] Attempt ${attempt} failed, retrying in ${delayMs}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+                continue;
+              }
+              
+              logError(`[Batch Translation] JigsawStack API call failed (attempt ${attempt}/${retries}): ${err.message}`);
+              throw err;
+            }
+          }
+        };
+        
+        // ✅ OPTIMIZE: Smaller chunks and longer delays
+        const CHUNK_SIZE = 3; // Reduced from 5 to 3
+        const chunks = [];
+        
+        for (let i = 0; i < texts.length; i += CHUNK_SIZE) {
+          chunks.push(texts.slice(i, i + CHUNK_SIZE));
+        }
+        
+        logInfo(`[Batch Translation] Processing ${texts.length} texts in ${chunks.length} chunks of ${CHUNK_SIZE}`);
+        
+        translatedTexts = [];
+        
+        // Process each chunk sequentially to avoid rate limits
+        for (let i = 0; i < chunks.length; i++) {
+          const chunk = chunks[i];
+          logInfo(`[Batch Translation] Processing chunk ${i + 1}/${chunks.length} (${chunk.length} texts)`);
+          
+          // Process chunk with retry logic
+          const chunkPromises = chunk.map(text => translateWithRetry(text));
+          
+          // Wait for this chunk to complete
+          const chunkResults = await Promise.all(chunkPromises);
+          translatedTexts.push(...chunkResults);
+          
+          // Longer delay between chunks (500ms instead of 100ms)
+          if (i < chunks.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        method = 'jigsawstack';
+        logInfo(`[Batch Translation] JigsawStack success - translated ${translatedTexts.length} texts in ${Date.now() - startTime}ms`);
+        
+      } catch (apiError) {
+        logError('[Batch Translation] JigsawStack API failed, falling back to Ollama', apiError.message);
+        
+        // Fallback to Ollama - translate each individually
+        translatedTexts = await Promise.all(
+          texts.map(text => translateWithOllama(text, targetLanguage))
+        );
+        method = 'ollama';
+      }
+    } else {
+      // No API key configured, use Ollama - translate each individually
+      logInfo('[Batch Translation] Using Ollama (no JigsawStack API key)');
+      translatedTexts = await Promise.all(
+        texts.map(text => translateWithOllama(text, targetLanguage))
+      );
+      method = 'ollama';
+    }
+    
+    const duration = Date.now() - startTime;
+    logInfo(`[Batch Translation] Completed ${texts.length} texts in ${duration}ms using ${method}`);
+    
+    res.json({
+      translatedTexts,
+      method,
+      duration,
+      count: texts.length,
+      originalTotalLength: texts.reduce((sum, t) => sum + t.length, 0),
+      translatedTotalLength: translatedTexts.reduce((sum, t) => sum + t.length, 0)
+    });
+    
+  } catch (error) {
+    logError('[Batch Translation] Error:', error);
+    res.status(500).json({ 
+      error: 'Batch translation failed',
+      details: error.message 
+    });
+  }
+});
+
+/**
+ * Helper: Translate with Ollama
+ */
+async function translateWithOllama(text, targetLanguage) {
+  const languageName = targetLanguage === 'hi' ? 'Hindi' : targetLanguage;
+  
+  const prompt = `Translate the following English text to ${languageName}. Only provide the translation, nothing else.
+
+English text:
+${text}
+
+${languageName} translation:`;
+  
+  const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
+    temperature: 0.3,
+    max_tokens: text.length * 3 // Allow for expansion
+  });
+  
+  return response.response.trim();
+}
 
 // ============================================
 // MEDICAL TERMS GLOSSARY ENDPOINT
@@ -709,9 +959,17 @@ async function startServer() {
       console.log('   Start Ollama: ollama serve');
       console.log('   Pull model: ollama pull mistral');
     }
+
+    // Check JigsawStack API configuration
+    if (JIGSAWSTACK_API_KEY && JIGSAWSTACK_API_KEY.length > 0) {
+      console.log(`JigsawStack API: ✅ Configured (Primary for translation)`);
+    } else {
+      console.log(`JigsawStack API: ⚠️  Not configured (Using Ollama for translation)`);
+    }
     
     console.log(`Port: ${PORT}`);
     console.log(`Max Concurrent Requests: ${MAX_CONCURRENT}`);
+    console.log(`Translation Max Length: ${TRANSLATION_MAX_LENGTH} chars`);
     console.log('='.repeat(60));
 
     app.listen(PORT, '0.0.0.0', () => {
