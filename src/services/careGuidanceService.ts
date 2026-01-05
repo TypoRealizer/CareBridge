@@ -40,7 +40,7 @@ export const generateCareGuidance = async (
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        summary: medicalText
+        text: medicalText  // ✅ FIXED: Changed from 'summary' to 'text' to match backend
       })
     });
 
@@ -56,10 +56,10 @@ export const generateCareGuidance = async (
 
     const data = await response.json();
     
-    // Backend now returns array of care items directly
-    if (Array.isArray(data)) {
-      console.log(`✅ Generated ${data.length} care guidance items from Mistral via Ollama`);
-      return data;
+    // Backend returns { careGuidance: [...] }
+    if (data.careGuidance && Array.isArray(data.careGuidance)) {
+      console.log(`✅ Generated ${data.careGuidance.length} care guidance items from Mistral via Ollama`);
+      return data.careGuidance;
     }
     
     console.warn('Invalid care guidance format from backend');

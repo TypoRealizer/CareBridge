@@ -70,8 +70,23 @@ export const extractTextFromFile = async (file: File): Promise<string> => {
 
   // Handle image and PDF files with OCR
   if (fileType.startsWith('image/') || fileType === 'application/pdf') {
-    const ocrResult = await processDocument(file);
-    return ocrResult.text;
+    try {
+      const ocrResult = await processDocument(file);
+      return ocrResult.text;
+    } catch (error: any) {
+      // ✅ CRITICAL: Handle "NO_CHARACTER_FOUND" error with user-friendly message
+      if (error.message === 'NO_CHARACTER_FOUND') {
+        throw new Error('No text found in the document. The image appears to be blank or contains no readable text. Please upload a clear image of a medical document with visible text.');
+      }
+      if (error.message === 'NOT_MEDICAL_DOCUMENT') {
+        throw new Error('This does not appear to be a medical document. Please upload a valid medical discharge summary, prescription, or health record.');
+      }
+      if (error.message === 'CORRUPTED_TEXT') {
+        throw new Error('The extracted text appears to be corrupted or unreadable. Please upload a clearer image of the document.');
+      }
+      // Re-throw other errors as-is
+      throw error;
+    }
   }
 
   // Handle audio files with Sarvam API transcription

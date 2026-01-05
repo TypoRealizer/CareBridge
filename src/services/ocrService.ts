@@ -100,6 +100,77 @@ const getMimeType = (file: File): string => {
 };
 
 /**
+ * Validates if the extracted text appears to be meaningful medical content
+ * Returns an object with validation result and reason
+ */
+const validateExtractedText = (text: string): { valid: boolean; reason?: string } => {
+  // Remove extra whitespace for analysis
+  const cleanText = text.trim().replace(/\s+/g, ' ');
+  
+  // ✅ CHECK 0: Completely empty or nearly empty
+  if (cleanText.length === 0) {
+    return {
+      valid: false,
+      reason: 'NO_CHARACTER_FOUND'
+    };
+  }
+  
+  // Check 1: Minimum length (medical documents should have substantive content)
+  if (cleanText.length < 50) {
+    return { 
+      valid: false, 
+      reason: 'NO_CHARACTER_FOUND'
+    };
+  }
+  
+  // Check 2: Check for actual words (not just random characters)
+  const wordCount = cleanText.split(/\s+/).filter(word => word.length >= 3).length;
+  if (wordCount < 10) {
+    return { 
+      valid: false, 
+      reason: 'NO_CHARACTER_FOUND'
+    };
+  }
+  
+  // Check 3: Check for medical document indicators
+  // Common keywords that should appear in discharge summaries
+  const medicalKeywords = [
+    'patient', 'diagnosis', 'treatment', 'medication', 'discharge', 
+    'admitted', 'hospital', 'condition', 'doctor', 'medical', 
+    'test', 'result', 'procedure', 'symptom', 'advice', 'follow',
+    'name', 'age', 'date', 'history', 'examination'
+  ];
+  
+  const lowerText = cleanText.toLowerCase();
+  const foundKeywords = medicalKeywords.filter(keyword => lowerText.includes(keyword));
+  
+  // Should have at least 2 medical keywords for a valid medical document
+  if (foundKeywords.length < 2) {
+    return { 
+      valid: false, 
+      reason: 'NOT_MEDICAL_DOCUMENT' 
+    };
+  }
+  
+  // Check 4: Detect if it's just repetitive or gibberish text
+  // Count unique words
+  const words = cleanText.toLowerCase().split(/\s+/);
+  const uniqueWords = new Set(words);
+  const uniqueRatio = uniqueWords.size / words.length;
+  
+  // If less than 30% unique words, it's likely repetitive/gibberish
+  if (uniqueRatio < 0.3 && words.length > 20) {
+    return { 
+      valid: false, 
+      reason: 'CORRUPTED_TEXT'
+    };
+  }
+  
+  // All checks passed
+  return { valid: true };
+};
+
+/**
  * Performs OCR on an image or PDF using Google Gemini Vision API
  */
 export const performOCR = async (file: File): Promise<OCRResponse> => {
@@ -107,7 +178,7 @@ export const performOCR = async (file: File): Promise<OCRResponse> => {
     // Check if API key is configured
     if (API_CONFIG.GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
       throw new Error(
-        'Gemini API key not configured. Please add your API key in /config/apiConfig.ts or .env file.\n\n' +
+        'Gemini API key not configured. Please add your API key in /config/apiConfig.ts or .env file.\\n\\n' +
         'Get your free API key at: https://aistudio.google.com/app/apikey'
       );
     }
@@ -165,6 +236,12 @@ export const performOCR = async (file: File): Promise<OCRResponse> => {
       throw new Error('No text found in the document. Please ensure the image is clear and contains readable text.');
     }
 
+    // ✅ CRITICAL: Validate the extracted text quality
+    const validation = validateExtractedText(extractedText);
+    if (!validation.valid) {
+      throw new Error(validation.reason || 'Invalid or blank document detected.');
+    }
+
     // Calculate confidence (Gemini doesn't provide this, so we estimate)
     // If we got text, assume high confidence
     const confidence = extractedText.length > 50 ? 0.95 : 0.85;
@@ -195,7 +272,7 @@ export const processPDF = async (file: File): Promise<OCRResponse> => {
     // Check if API key is configured
     if (API_CONFIG.GEMINI_API_KEY === 'YOUR_GEMINI_API_KEY_HERE') {
       throw new Error(
-        'Gemini API key not configured. Please add your API key in /config/apiConfig.ts or .env file.\n\n' +
+        'Gemini API key not configured. Please add your API key in /config/apiConfig.ts or .env file.\\n\\n' +
         'Get your free API key at: https://aistudio.google.com/app/apikey'
       );
     }
@@ -240,6 +317,12 @@ export const processPDF = async (file: File): Promise<OCRResponse> => {
 
     if (!extractedText || extractedText.trim().length === 0) {
       throw new Error('No text found in the PDF. Please ensure the PDF contains readable text.');
+    }
+
+    // ✅ CRITICAL: Validate the extracted text quality for PDFs too
+    const validation = validateExtractedText(extractedText);
+    if (!validation.valid) {
+      throw new Error(validation.reason || 'Invalid or blank PDF document detected.');
     }
 
     return {

@@ -31,7 +31,7 @@ export const generateFAQs = async (medicalText: string): Promise<FAQ[] | null> =
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        summary: medicalText
+        text: medicalText  // ✅ FIXED: Changed from 'summary' to 'text' to match backend
       })
     });
 

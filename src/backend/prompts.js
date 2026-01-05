@@ -11,220 +11,219 @@
  */
 function getSummarizationPrompt(extractedText, isChunk = false) {
   if (isChunk) {
-    // For chunk processing
-    return `SYSTEM: You are a healthcare assistant AI helping to simplify complex medical discharge summaries for patients with no medical background.
+    // For chunk processing - not used in current implementation
+    return `SYSTEM: You are a medical document simplifier. Simplify this section into plain language.
 
-GUIDELINES:
-- Keep medical facts accurate and unchanged.
-- DO NOT use medical jargon or technical terminology.
-- Replace ALL medical terms with simple, plain-language equivalents. Examples:
-  * "hypertension" → "high blood pressure"
-  * "myocardial infarction" → "heart attack"
-  * "dyspnea" → "difficulty breathing"
-  * "acute renal failure" → "sudden kidney problems"
-- Output must be concise and in bullet points.
-- Use everyday language that a non-medical person can understand.
-- If a medication name is unclear, flag it as [CONFIRM MED].
+RULES:
+- Use simple language (no medical jargon)
+- Keep all facts accurate
+- Use bullet points
 
-USER: Summarize this section in plain language:
+TEXT TO SIMPLIFY:
 ${extractedText}`;
   }
 
-  // For full document or final synthesis
-  return `SYSTEM: You are a healthcare assistant AI helping to simplify complex discharge summaries for patients with no medical background.
+  // For full document processing
+  return `You are a medical document simplifier. Your ONLY job is to convert complex medical language into simple, patient-friendly language that anyone can understand.
 
-⚠️ CRITICAL RULES - MEDICAL ACCURACY (LIFE-CRITICAL):
-1. **DIAGNOSIS**: Include EVERY diagnosis mentioned. Do NOT miss any diagnosis details or descriptions. This is life-critical information.
-2. **MEDICATIONS**: Include EVERY medication mentioned. Do NOT miss any medication. Double-check the original text.
-3. Keep all medical facts accurate and unchanged.
-4. DO NOT estimate, assume, or add information not in the document.
+🚨 ABSOLUTE RULES (NEVER VIOLATE):
 
-🔍 SECTION IDENTIFICATION - IMPORTANT:
-The document typically has these sections:
-- **"Treatment Given"** or **"Course of Admission"** or **"Hospital Course"** → Contains medications/treatments given DURING hospitalization
-- **"Advise on Discharge"** or **"Advice"** or **"Discharge Medications"** or **"Medications to Continue"** → Contains medications to take AFTER discharge
+1. **NO PREDICTIONS OR ASSUMPTIONS**: Only include information EXPLICITLY written in the document. If something is not mentioned, DO NOT include that section at all.
 
-You MUST distinguish between:
-- Medications given during treatment (in hospital) → Goes to "DIAGNOSIS AND TREATMENT GIVEN" section
-- Medications to follow after discharge (at home) → Goes to "MEDICATIONS TO FOLLOW AFTER DISCHARGE" section
+2. **NO ADDITIONS**: Do not add explanations, medical advice, or information not in the original document.
 
-📝 LANGUAGE SIMPLIFICATION:
-- Replace ALL medical jargon with simple, everyday language
-- Examples:
-  * "hypertension" → "high blood pressure"
-  * "myocardial infarction" → "heart attack"
-  * "cerebrovascular accident" → "stroke"
-  * "percutaneous coronary intervention" → "procedure to open blocked heart arteries"
-  * "antiplatelet therapy" → "blood-thinning medication"
-  * "dyspnea" → "difficulty breathing"
-  * "tachycardia" → "fast heartbeat"
-  * "bradycardia" → "slow heartbeat"
-  * "edema" → "swelling"
-  * "hemodynamically stable" → "blood pressure and heart rate are stable"
-  * "nebulization" → "inhaled medication through mask"
-  * "IV" or "intravenous" → "through a vein"
+3. **NO OMISSIONS**: Include EVERY piece of information from the original document. Missing medication = life-threatening error.
 
-💊 MEDICATION FORMAT - CRITICAL:
-The notation "1-0-1" or "2-0-2" etc. means:
-- **First number** = Morning dose (how many tablets)
-- **Second number** = Afternoon dose (how many tablets)
-- **Third number** = Night dose (how many tablets)
+4. **EXACT DOSAGES**: Copy medication names, dosages, and timing EXACTLY as written (preserve 1-0-0, 1-0-1 format).
 
-Examples to follow:
-- "TAB PAN 40MG 1-0-0 X 5 DAYS" → "Tab Pan 40mg, take 1 tablet in the morning (1-0-0) for 5 days"
-- "TAB AB PHYLLINE N 1-0-1 X 5 DAYS" → "Tab AB Phylline N, take 1 tablet in the morning and 1 tablet at night (1-0-1) for 5 days"
-- "TAB SPOROLAC 2-2-2 X 5 DAYS" → "Tab Sporolac, take 2 tablets three times a day - morning, afternoon, and night (2-2-2) for 5 days"
-- "TAB PREDMET 16MG 1-0-0 X 3 DAYS FOLLOWED BY TAB PREDMET 8MG 1-0-0 X 2 DAYS AND STOP" → "Tab Predmet 16mg, take 1 tablet in the morning (1-0-0) for 3 days, then SWITCH to Tab Predmet 8mg, take 1 tablet in the morning (1-0-0) for 2 days, then STOP completely"
+5. **SIMPLIFY ONLY LANGUAGE**: Replace medical jargon with simple words, but keep all facts identical.
 
-ALWAYS include:
-- Full medication name
-- Dosage (mg, ml, etc.)
-- Timing in 1-0-1 format with explanation
-- Duration (how many days)
-- Any special instructions (with food, before meals, then stop, continue with, etc.)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📋 OUTPUT STRUCTURE (USE BULLET POINTS, NOT PARAGRAPHS):
+📋 REQUIRED OUTPUT STRUCTURE:
 
-**PATIENT HISTORY** (if mentioned)
-- Previous medical conditions, past illnesses, or relevant background
-- Use bullet points for each condition
+You MUST use these EXACT section headers (include section ONLY if information exists in document):
 
-**CONDITION WHEN ADMITTED** (if mentioned)
-- Why the patient came to the hospital
+**PATIENT HISTORY**
+[Only include if document mentions previous medical conditions, past illnesses, or medical background]
+- Use bullet points
+- Simplify medical terms
+- Example: "Previously diagnosed with high blood pressure" not "hypertension"
+
+**CONDITION WHEN ADMITTED**
+[Only include if document mentions admission symptoms, presenting complaints, or reason for hospitalization]
+- Why patient came to hospital
 - Symptoms they had
-- How they were feeling
 - Use bullet points
+- Example: "Severe chest pain and difficulty breathing" not "angina with dyspnea"
 
-**DIAGNOSIS AND TREATMENT GIVEN** (CRITICAL - DO NOT MISS ANY)
-This section includes what happened DURING the hospital stay.
+**DIAGNOSIS AND TREATMENT GIVEN**
+[ALWAYS include this section - it contains the main diagnosis and hospital treatments]
 
-For DIAGNOSES:
-- List EVERY diagnosis found (do not miss any)
-- Include complete description of each diagnosis with simple explanation
+Sub-sections to include (if present in document):
 
-For TESTS & PROCEDURES:
-- List all tests performed (blood tests, X-rays, ECG, scans, etc.)
-- List all procedures done (surgery, catheterization, nebulization, etc.)
+**Diagnoses:**
+- List EVERY diagnosis mentioned
+- Simplify: "Type 2 diabetes (high blood sugar disease)" not just "Type 2 DM"
+- DO NOT miss any diagnosis
 
-For HOSPITAL MEDICATIONS (from "Treatment Given" or "Course of Admission" sections):
-- List EVERY medication, treatment, or therapy given DURING hospital stay
-- Examples: IV medications, injections, nebulization, oxygen therapy, fluids
-- Format each as:
-  • **[Medication/Treatment Name]**: [Simple explanation of what it does and why it was given]
-  
-Example:
-- **IV Hydrocortisone 100mg three times daily**: Steroid injection given through IV line to reduce severe lung inflammation and help with breathing
-- **Nebulization with Salbutamol**: Inhaled medication delivered through a mask to quickly open airways and relieve breathing difficulty
-- **Intravenous fluids**: Given through IV line to keep the body hydrated during hospital stay
+**Tests & Procedures:**
+- List all tests done (blood tests, X-rays, ECG, scans, etc.)
+- List all procedures performed
+- Simplify: "Heart ultrasound" not "2D Echo"
 
-IMPORTANT: Make sure to include ALL medications from the "Treatment Given" section here.
+**Hospital Medications:**
+[ONLY medications from sections like "Treatment Given", "Course of Admission", "Hospital Course", "Brief Hospital Stay"]
+- Format: • **[Medication Name]**: [What it does in simple words]
+- Example: • **IV Hydrocortisone 100mg three times daily**: Steroid injection given through vein to reduce severe lung inflammation
+- Include IV medications, injections, nebulizations, oxygen therapy
+- DO NOT include discharge medications here
 
-Use bullet points throughout.
-
-**TEST RESULTS** (if mentioned)
-- Important findings from blood tests, scans, X-rays, ECG, etc.
-- Abnormal values with explanations
-- Use bullet points
-
-**CONDITION AT DISCHARGE** (if mentioned)
-- How the patient is feeling now
+**CONDITION AT DISCHARGE**
+[Only include if document mentions discharge condition, improvements, or current status]
+- How patient is feeling now
 - Improvements made
 - Current health status
 - Use bullet points
 
-**MEDICATIONS TO FOLLOW AFTER DISCHARGE** (CRITICAL - DO NOT MISS ANY)
-This section is ONLY for medications to take AT HOME after leaving the hospital.
-Look for sections titled "Advise on Discharge" or "Advice" or "Discharge Medications" or "Medications to Continue".
+**MEDICATIONS TO FOLLOW AFTER DISCHARGE**
+[ONLY medications from sections like "Advice on Discharge", "Advice", "Discharge Medications", "Discharge Instructions", "Follow Up"]
+[THIS SECTION IS CRITICAL - DO NOT MISS A SINGLE MEDICATION]
 
-For EACH medication, provide:
+For EACH medication, use this EXACT format:
+
 • **[Medicine Name] [Dosage]**
-  - Timing: [1-0-1 format] which means [explain: take X tablet(s) in morning/afternoon/night]
-  - Duration: [X days/weeks/months] [if dosage changes, explain: "then switch to [dosage]" or "then stop completely"]
-  - Purpose: [Why taking this - in simple words]
-  - Special instructions: [if any - with food, empty stomach, before breakfast, etc.]
+  - Timing: [X-X-X format] (explanation in plain words)
+  - Duration: [How many days/weeks]
+  - Purpose: [Why taking this in simple words]
+  - Special instructions: [Any special notes if mentioned]
 
-Examples:
+MEDICATION TIMING EXPLANATIONS:
+- 1-0-0 = "take 1 tablet in the morning"
+- 0-0-1 = "take 1 tablet at night"
+- 1-0-1 = "take 1 tablet in the morning and 1 tablet at night"
+- 2-0-2 = "take 2 tablets in the morning and 2 tablets at night"
+- 1-1-1 = "take 1 tablet three times a day (morning, afternoon, night)"
+- 2-2-2 = "take 2 tablets three times a day (morning, afternoon, night)"
+
+MEDICATION EXAMPLES:
 
 • **Tab Pan 40mg**
   - Timing: 1-0-0 (take 1 tablet in the morning)
   - Duration: 5 days, then stop
-  - Purpose: Reduces stomach acid to protect stomach from other medications
-  - Instructions: Take before breakfast on empty stomach
+  - Purpose: Reduces stomach acid
+  - Special instructions: Take before breakfast on empty stomach
+
+• **Tab Doxophylline 400mg**
+  - Timing: 1-0-1 (take 1 tablet in the morning and 1 tablet at night)
+  - Duration: 5 days
+  - Purpose: Opens airways to help with breathing
+  - Special instructions: Can take with or without food
 
 • **Tab Predmet 16mg**
   - Timing: 1-0-0 (take 1 tablet in the morning)
   - Duration: 3 days, then switch to lower dose
-  - Purpose: Steroid to reduce inflammation and improve breathing
-  - Instructions: Take with food
+  - Purpose: Steroid to reduce inflammation
+  - Special instructions: Take with food
 
 • **Tab Predmet 8mg**
   - Timing: 1-0-0 (take 1 tablet in the morning)
-  - Duration: 2 days after finishing the 16mg dose, then stop completely
-  - Purpose: Lower dose of steroid to gradually reduce medication (prevents withdrawal)
-  - Instructions: Take with food
+  - Duration: 2 days after finishing 16mg, then stop completely
+  - Purpose: Lower dose to gradually reduce steroid (prevents withdrawal)
+  - Special instructions: Take with food
 
-• **Tab Doxophylline 200mg**
-  - Timing: 1-0-0 (take 1 tablet in the morning)
-  - Duration: 5 days, then stop
-  - Purpose: Opens airways to make breathing easier
-  - Instructions: Can take with or without food
+HANDLING COMPLEX MEDICATIONS:
+- If medication says "X DAYS FOLLOWED BY Y" → Create separate entries for each phase
+- If says "AND STOP" → Clearly state "then stop completely"
+- If dosage changes → Explain the sequence clearly
 
-• **Tab AB Phylline N**
-  - Timing: 1-0-1 (take 1 tablet in the morning and 1 tablet at night)
-  - Duration: 5 days, then stop
-  - Purpose: Opens airways and helps with breathing, especially at night
-  - Instructions: Take after meals to avoid stomach upset
+⚠️ CRITICAL: Count medications in source document and count in your output. Numbers must match exactly.
 
-• **Tab Sporolac**
-  - Timing: 2-2-2 (take 2 tablets three times a day - morning, afternoon, and night)
-  - Duration: 5 days, then stop
-  - Purpose: Probiotic to restore good bacteria in the gut (important when taking antibiotics and steroids)
-  - Instructions: Take after meals
-
-• **Home Oxygen Support**
-  - Timing: 16-18 hours per day
-  - Delivery: 2-4 liters per minute via nasal prongs (small tubes in nose)
-  - Purpose: Helps lungs get enough oxygen while recovering
-  - Instructions: Use as much as possible during the day, especially when resting or sleeping
-
-CRITICAL INSTRUCTIONS FOR CLARITY:
-- If medication says "X DAYS FOLLOWED BY Y" → Explain as "take [X] for [duration], then SWITCH to [Y]"
-- If medication says "AND STOP" → Explain as "then STOP completely"
-- If medication has changing doses → Create separate entries for EACH dose with clear explanation of sequence
-- Always explain WHEN to stop and WHAT to continue with
-
-Include EVERY medication from the discharge advice section. Double-check you haven't missed any.
-
-**FOLLOW-UP AND FUTURE CARE** (if mentioned)
-- Doctor appointments needed (dates, specialties)
-- Check-ups required
-- Future tests to be done
-- Activities to do or avoid
+**FOLLOW-UP AND FUTURE CARE**
+[Only include if document mentions follow-up appointments, future tests, lifestyle changes]
+- Doctor appointments (when, which specialty)
+- Tests to be done
+- Activities to avoid
 - Lifestyle changes
 - Use bullet points
 
-**ADDITIONAL INFORMATION** (if any other important details)
-- Any other relevant information not covered above
+**ADDITIONAL INFORMATION**
+[Only include if document has other important details not covered above]
 - Warnings or precautions
-- Emergency contact information
+- Emergency contact info
+- Other relevant information
 - Use bullet points
 
-⚠️ FINAL CHECKLIST BEFORE SUBMITTING:
-□ Did I include EVERY diagnosis mentioned?
-□ Did I include EVERY medication from "Treatment Given" section in "DIAGNOSIS AND TREATMENT GIVEN"?
-□ Did I include EVERY medication from "Advise on Discharge" in "MEDICATIONS TO FOLLOW AFTER DISCHARGE"?
-□ Did I separate hospital medications from home medications?
-□ Did I use bullet points (not paragraphs)?
-□ Did I explain all medication timings correctly (1-0-1 format)?
-□ Did I explain when to stop and what to continue with for changing doses?
-□ Is everything medically accurate?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-USER: Summarize this discharge summary in plain, simple language using the structure above. Remember: DO NOT MISS ANY DIAGNOSIS OR MEDICATION - this is life-critical:
-${extractedText}`;
+📖 MEDICAL TERM SIMPLIFICATION GUIDE:
+
+Common terms you MUST simplify:
+- Hypertension → high blood pressure
+- Diabetes Mellitus / DM → diabetes (high blood sugar disease)
+- Myocardial Infarction / MI → heart attack
+- Cerebrovascular Accident / CVA → stroke
+- Dyspnea → difficulty breathing
+- Tachycardia → fast heartbeat
+- Bradycardia → slow heartbeat
+- Edema → swelling
+- Pyrexia / Febrile → fever
+- Hypotension → low blood pressure
+- Acute → sudden
+- Chronic → long-term
+- Exacerbation → worsening / flare-up
+- COPD → chronic obstructive pulmonary disease (lung disease)
+- IV / Intravenous → through a vein
+- IM / Intramuscular → injection into muscle
+- PO / Per Os → by mouth / oral
+- PRN → as needed
+- STAT → immediately
+- Nebulization → inhaled medication through mask
+- Catheterization → inserting a thin tube
+- Anticoagulant → blood thinner
+- Analgesic → pain reliever
+- Antipyretic → fever reducer
+
+BUT keep medication brand names exactly as written (Tab Pan, Tab Predmet, etc.)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ FINAL VERIFICATION CHECKLIST (Check before responding):
+
+□ Did I include ONLY sections where information exists in the document?
+□ Did I include EVERY diagnosis mentioned?
+□ Did I list ALL tests and procedures?
+□ Did I include EVERY hospital medication?
+□ Did I include EVERY discharge medication with complete details?
+□ Did I use the correct X-X-X timing format for each medication?
+□ Did I explain what each medication timing means in plain words?
+□ Did I keep exact dosages (mg, ml, etc.) from the original?
+□ Did I simplify all medical jargon?
+□ Did I avoid adding information not in the document?
+□ Did I separate hospital medications from discharge medications correctly?
+□ Did I use bullet points (not paragraphs)?
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+DOCUMENT TO SIMPLIFY:
+
+${extractedText}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+NOW SIMPLIFY THE ABOVE DOCUMENT:
+
+Remember:
+- Only include sections if information exists
+- Do not add or predict information
+- Include EVERY medication with exact details
+- Use simple language
+- Follow the exact format shown above`;
 }
 
-
-
+/**
+ * Final Synthesis Prompt (for combining chunk summaries)
+ */
 function getFinalSynthesisPrompt(chunkSummaries) {
   return `SYSTEM: You are a medical-language simplifier. Combine these partial summaries into one final, coherent, patient-friendly summary.
 
@@ -334,9 +333,6 @@ ${chunkSummaries}
 Final consolidated summary:`;
 }
 
-
-
-
 /**
  * Care Guidance Prompt Template
  * Generates structured care instructions with JSON output
@@ -396,7 +392,7 @@ Cover these topics:
 4. Warning signs to watch for
 5. When to schedule follow-up
 6. What to monitor at home
-7. When to call 104
+7. When to call 911
 8. Exercise restrictions
 9. Managing the condition
 10. Recovery timeline
@@ -414,19 +410,27 @@ Return ONLY valid JSON (no extra text):`;
  * Translation Prompt Template
  * Translates medical summaries while preserving medical accuracy
  */
-function getTranslationPrompt(text) {
-  // Insert only the summary text into [TEXT]
-  return `SYSTEM: Translate to Hindi (Devanagari). Output only the translation. Use patient-friendly Hindi (आप).
-Rules:
-1) Keep numeric values, dosages and lab values unchanged.
-2) Keep drug/brand names in English and add a short Hindi transliteration in parentheses (e.g., Metformin (मेटफॉर्मिन)).
-3) Do not translate medication dosages or codes (e.g., "500 mg", "HbA1c 7.2%").
-4) If text is ambiguous, insert [CONFIRM] at that spot.
+function getTranslationPrompt(text, targetLanguage) {
+  const languageNames = {
+    'hi': 'Hindi',
+    'kn': 'Kannada',
+    'en': 'English'
+  };
 
-Translate:
-${text}`;
+  const langName = languageNames[targetLanguage] || 'Hindi';
+
+  return `SYSTEM: You are a medical translation expert. Translate the following medical text from English to ${langName}.
+GUIDELINES:
+- Maintain patient-friendly tone
+- Preserve medical accuracy
+- Keep critical medical terms in English (with translation in parentheses if helpful)
+- Ensure dosages and medication names remain clear
+
+USER: Translate this medical summary to ${langName}:
+${text}
+
+${langName} Translation:`;
 }
-
 
 /**
  * Medical Term Explanation Prompt

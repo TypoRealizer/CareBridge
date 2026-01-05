@@ -14,8 +14,14 @@ function postProcessSummary(rawSummary) {
   console.log('[PostProcess] Starting summary restructuring...');
   
   try {
+    // 🔧 CRITICAL FIX: Clean OCR artifacts FIRST
+    let cleanedSummary = cleanOCRArtifacts(rawSummary);
+    
+    // 🔧 FIX: Detect if Mistral cut off mid-response (incomplete medications)
+    cleanedSummary = fixIncompleteMedications(cleanedSummary);
+    
     // Parse the summary into sections
-    const sections = parseSections(rawSummary);
+    const sections = parseSections(cleanedSummary);
     
     // Detect and categorize all content
     const categorized = categorizeSectionContent(sections);
@@ -31,6 +37,110 @@ function postProcessSummary(rawSummary) {
     // Return original if post-processing fails
     return rawSummary;
   }
+}
+
+/**
+ * Clean OCR artifacts and malformed text
+ */
+function cleanOCRArtifacts(summary) {
+  console.log('[PostProcess] Cleaning OCR artifacts...');
+  
+  let cleaned = summary;
+  
+  // Remove HTML-like artifacts (MORE AGGRESSIVE)
+  cleaned = cleaned.replace(/artery walls\">/g, '');
+  cleaned = cleaned.replace(/artery\s+walls\s*["\']?\s*>/g, '');
+  cleaned = cleaned.replace(/<[^>]+>/g, '');
+  cleaned = cleaned.replace(/["\'][^"\']*>/g, '');
+  
+  // Remove "systemic artery walls">HYPERTENSION" pattern specifically
+  cleaned = cleaned.replace(/systemic\s+artery\s+walls["\']?>\s*/gi, 'systemic ');
+  cleaned = cleaned.replace(/\(\s*systemic\s+artery\s+walls["\']?>\s*hypertension\s*\)/gi, '(high blood pressure)');
+  
+  // Remove website URLs and OCR garbage at end of lines
+  cleaned = cleaned.replace(/www\.[a-z0-9\-]+\.(org|com|in)[^\s]*/gi, '');
+  cleaned = cleaned.replace(/[A-Z0-9]{10,}/g, ''); // Long alphanumeric strings
+  
+  // Remove pipes and OCR artifacts
+  cleaned = cleaned.replace(/\s*\|\s*/g, ' ');
+  cleaned = cleaned.replace(/\s{2,}/g, ' '); // Multiple spaces to single space
+  
+  // Fix common OCR mistakes
+  cleaned = cleaned.replace(/TOMBINU/g, '');
+  cleaned = cleaned.replace(/OLD MEDICATIONG/g, '');
+  cleaned = cleaned.replace(/MH\d{8}/g, ''); // Medical record numbers
+  cleaned = cleaned.replace(/KMC\s*No\.?\s*\d{5,}/gi, ''); // Doctor registration numbers
+  cleaned = cleaned.replace(/RMHIP\/\d+/g, '');
+  cleaned = cleaned.replace(/AdMG\/[\d\.]+/g, '');
+  
+  // Remove "Prepared By:", "Sinus rhythm", ECG artifacts at end
+  cleaned = cleaned.replace(/\*\*Prepared By:\*\*[\s\S]*$/i, '');
+  cleaned = cleaned.replace(/- Prepared By:[\s\S]*$/i, '');
+  cleaned = cleaned.replace(/- Sinus rhythm[\s\S]*$/i, '');
+  cleaned = cleaned.replace(/Abnormal R-wave[\s\S]*$/i, '');
+  
+  // Remove trailing numbers and dates at end (OCR artifacts)
+  cleaned = cleaned.replace(/\d{2}\/\d{2}\/\d{4}\s*&\s*[\d:]+[AP]M\s*$/gm, '');
+  
+  // Remove duplicate section headers if they appear
+  cleaned = cleaned.replace(/(\*\*DIAGNOSIS AND TREATMENT GIVEN\*\*[\s\S]*?)\*\*DIAGNOSIS AND TREATMENT GIVEN\*\*/i, '$1');
+  cleaned = cleaned.replace(/(\*\*MEDICATIONS TO FOLLOW AFTER DISCHARGE\*\*[\s\S]*?)\*\*MEDICATIONS TO FOLLOW AFTER DISCHARGE\*\*/i, '$1');
+  
+  return cleaned.trim();
+}
+
+/**
+ * Fix incomplete medication sections (when Mistral cuts off mid-response)
+ */
+function fixIncompleteMedications(summary) {
+  console.log('[PostProcess] Checking for incomplete medications...');
+  
+  // Detect incomplete medication entries
+  // Pattern: medication line ends mid-sentence or has all remaining meds mashed together in one line
+  const lines = summary.split('\n');
+  const fixedLines = [];
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    
+    // Check if this is a medication line with **TAB/CAP** followed by ALL remaining medications
+    if (trimmed.match(/\*\*TAB |CAP /i) && trimmed.length > 300) {
+      console.log('[PostProcess] ⚠️  Found overly long medication line, attempting to split...');
+      
+      // Try to split by medication names (TAB, CAP, INJ)
+      const splitMeds = trimmed.split(/(\*\*(?:TAB|CAP|INJ)\s+[^\*]+)/i).filter(s => s.trim());
+      
+      // Add each medication as a separate line
+      splitMeds.forEach(med => {
+        if (med.trim()) {
+          fixedLines.push(med.trim());
+        }
+      });
+    } else if (trimmed.includes('Note:') && trimmed.length > 200) {
+      // If "Note:" field contains mashed medications, split them out
+      console.log('[PostProcess] ⚠️  Found medications mashed in Note field...');
+      
+      const parts = trimmed.split('Note:');
+      fixedLines.push(parts[0].trim()); // Add the part before "Note:"
+      
+      // The Note content likely has medications
+      if (parts[1]) {
+        const notePart = parts[1].trim();
+        // Try to extract individual medications
+        const meds = notePart.split(/(\s+TAB\s+|\s+CAP\s+)/i);
+        meds.forEach((med, idx) => {
+          if (med.trim() && !med.match(/^\s*(TAB|CAP)\s*$/i)) {
+            fixedLines.push(`• **${med.trim()}`);
+          }
+        });
+      }
+    } else {
+      fixedLines.push(line);
+    }
+  }
+  
+  return fixedLines.join('\n');
 }
 
 /**

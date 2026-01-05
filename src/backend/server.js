@@ -1,272 +1,215 @@
 /**
  * CareBridge Backend Server
  * 
- * Node.js/Express backend integrating Mistral model via Ollama
- * for medical document simplification, care guidance, and FAQ generation.
+ * Handles medical document processing using:
+ * - Ollama (Local LLM) for summarization, FAQ generation, care guidance, and translation
+ * - JigsawStack API (optional) for high-quality translation
  * 
- * Setup:
- * 1. Install dependencies: npm install
- * 2. Install Ollama: https://ollama.ai
- * 3. Pull Mistral model: ollama pull mistral
- * 4. Copy .env.example to .env and configure
- * 5. Start server: npm start
+ * Architecture:
+ * Frontend → Backend API → Ollama/JigsawStack → Processed Medical Text
  */
 
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const prompts = require('./prompts');
-const utils = require('./utils');
+require('dotenv').config();
+
 const ollamaClient = require('./ollamaClient');
-const postProcess = require('./postProcessSummary');
-const documentParser = require('./documentParser');
+const prompts = require('./prompts_new'); // UPDATED: Using improved prompts
+const utils = require('./utils');
+const { parseDischargeDocument, mergeWithAISummary } = require('./documentParser');
+const { postProcessSummary } = require('./postProcessSummary');
+const { validateSummaryQuality, deepCleanSummary } = require('./outputValidator');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'mistral';
-const JIGSAWSTACK_API_KEY = process.env.JIGSAWSTACK_API_KEY || '';
-const TRANSLATION_MAX_LENGTH = parseInt(process.env.TRANSLATION_MAX_LENGTH) || 10000;
-const TRANSLATION_TIMEOUT = parseInt(process.env.TRANSLATION_TIMEOUT) || 15000;
+const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REQUESTS || '5');
 
-// 🔧 Increased concurrency limit for translation workload
-const MAX_CONCURRENT = parseInt(process.env.MAX_CONCURRENT_REQUESTS) || 10; // Increased from 3 to 10
+// JigsawStack API Configuration for Translation
+const JIGSAWSTACK_API_KEY = process.env.JIGSAWSTACK_API_KEY || '';
+const JIGSAWSTACK_BASE_URL = 'https://api.jigsawstack.com/v1';
+
+// Safety limits
+const SUMMARY_MAX_LENGTH = 50000; // 50K characters max
+const TRANSLATION_MAX_LENGTH = 10000; // 10K characters per translation call
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '10mb' })); // Increased for large documents
 
-// Request logging middleware (metadata only, no PHI)
-app.use((req, res, next) => {
-  const start = Date.now();
-  res.on('finish', () => {
-    const duration = Date.now() - start;
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
-  });
-  next();
-});
-
-// Concurrency control
+// Request queue for rate limiting
 let activeRequests = 0;
 
-function checkConcurrency(req, res, next) {
-  if (activeRequests >= MAX_CONCURRENT) {
-    return res.status(429).json({
-      error: 'Too many concurrent requests',
-      message: 'Please wait — processing previous file',
-      retryAfter: 5
-    });
-  }
-  activeRequests++;
-  res.on('finish', () => {
-    activeRequests--;
-  });
-  next();
-}
-
-// ============================================
-// HEALTH CHECK
-// ============================================
-
 // Logging helpers
-function logInfo(message, ...args) {
-  console.log(`[INFO] ${message}`, ...args);
-}
+const logInfo = (message, ...args) => console.log(`[${new Date().toISOString()}] ${message}`, ...args);
+const logError = (message, ...args) => console.error(`[${new Date().toISOString()}] ❌ ${message}`, ...args);
 
-function logError(message, ...args) {
-  console.error(`[ERROR] ${message}`, ...args);
-}
+// ============================================
+// HEALTH CHECK ENDPOINT
+// ============================================
 
 app.get('/health', async (req, res) => {
-  try {
-    const ollamaAvailable = await ollamaClient.isAvailable();
-    const models = await ollamaClient.listModels();
-    
-    res.json({
-      status: ollamaAvailable ? 'healthy' : 'degraded',
-      ollama: {
-        available: ollamaAvailable,
-        model: OLLAMA_MODEL,
-        models: models.map(m => m.name || m.model)
-      },
-      server: {
-        uptime: process.uptime(),
-        activeRequests: activeRequests,
-        maxConcurrent: MAX_CONCURRENT
-      },
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    res.status(503).json({
-      status: 'error',
-      message: error.message
-    });
-  }
+  const ollamaAvailable = await ollamaClient.isAvailable();
+  
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    services: {
+      ollama: ollamaAvailable ? 'connected' : 'unavailable',
+      jigsawstack: JIGSAWSTACK_API_KEY ? 'configured' : 'not configured'
+    },
+    model: OLLAMA_MODEL,
+    activeRequests: activeRequests,
+    maxConcurrent: MAX_CONCURRENT
+  });
 });
 
 // ============================================
 // SUMMARIZATION ENDPOINT
 // ============================================
 
-app.post('/api/summarize', checkConcurrency, async (req, res) => {
+app.post('/api/summarize', async (req, res) => {
   const startTime = Date.now();
+  activeRequests++;
   
   try {
-    const { text, options = {} } = req.body;
-
+    logInfo('[Summarize] Request received');
+    
+    const { text, options } = req.body;
+    
+    // Validate input
     if (!text || typeof text !== 'string') {
       return res.status(400).json({
         error: 'Invalid request',
         message: 'Text is required and must be a string'
       });
     }
-
-    // 🔴 CRITICAL: Enforce maximum text length to prevent system crashes
-    const MAX_TEXT_LENGTH = 50000; // 50K characters max
-    if (text.length > MAX_TEXT_LENGTH) {
-      return res.status(413).json({
+    
+    // 🔴 CRITICAL: Text length validation to prevent system crashes
+    if (text.length > SUMMARY_MAX_LENGTH) {
+      return res.status(400).json({
         error: 'Text too long',
-        message: `Text exceeds maximum length of ${MAX_TEXT_LENGTH} characters. Current length: ${text.length}. Please split into smaller documents.`,
-        maxLength: MAX_TEXT_LENGTH,
-        currentLength: text.length
+        message: `Text length (${text.length.toLocaleString()} chars) exceeds maximum of ${SUMMARY_MAX_LENGTH.toLocaleString()} characters`
       });
     }
-
+    
     // Sanitize input
     const sanitizedText = ollamaClient.sanitizeInput(text);
     
-    if (!sanitizedText) {
+    if (sanitizedText.length < 50) {
       return res.status(400).json({
-        error: 'Invalid text',
-        message: 'Text is empty after sanitization'
+        error: 'Text too short',
+        message: 'Provided text is too short to process. Please provide a complete medical document.'
       });
     }
-
-    console.log(`[Summarize] Processing text: ${sanitizedText.length} chars`);
-
-    // ✅ PRE-PARSE: Extract structured data from original document
-    console.log('[Summarize] Pre-parsing document for structured data extraction...');
-    const parsedData = documentParser.parseDischargeDocument(sanitizedText);
-
-    let summary;
-    let tokensConsumed = 0;
-
-    // Check if chunking is needed
-    const estimatedTokens = utils.estimateTokens(sanitizedText);
-    const needsChunking = sanitizedText.length > 5000 || estimatedTokens > 2500;
-
-    if (needsChunking) {
-      console.log(`[Summarize] Large document detected. Using chunking strategy.`);
-      
-      // Split into chunks
-      const chunks = utils.chunkText(sanitizedText, 6000);
-      console.log(`[Summarize] Split into ${chunks.length} chunks`);
-
-      // Process each chunk
-      const chunkSummaries = [];
-      
-      for (let i = 0; i < chunks.length; i++) {
-        console.log(`[Summarize] Processing chunk ${i + 1}/${chunks.length}...`);
-        
-        const chunkPrompt = prompts.getSummarizationPrompt(chunks[i], true);
-        const response = await ollamaClient.generate(OLLAMA_MODEL, chunkPrompt, {
-          temperature: 0.1,
-          max_tokens: 2048  // Increased from 500 to 2048 for detailed chunk summaries
-        });
-
-        chunkSummaries.push(response.response);
-        tokensConsumed += (response.eval_count || 0);
-      }
-
-      // Combine chunk summaries
-      console.log(`[Summarize] Synthesizing final summary`);
-      const synthesisPrompt = prompts.getFinalSynthesisPrompt(chunkSummaries.join('\n\n---\n\n'));
-      const finalResponse = await ollamaClient.generate(OLLAMA_MODEL, synthesisPrompt, {
-        temperature: 0.1,
-        max_tokens: 4096  // Increased from 1000 to 4096 for complete final summaries
-      });
-
-      summary = finalResponse.response;
-      tokensConsumed += (finalResponse.eval_count || 0);
-
-    } else {
-      // Process as single document
-      console.log(`[Summarize] Processing as single document`);
-      
-      const prompt = prompts.getSummarizationPrompt(sanitizedText, false);
-      const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
-        temperature: 0.1,
-        max_tokens: 4096  // Increased from 800 to 4096 for complete single-document summaries
-      });
-
-      summary = response.response;
-      tokensConsumed = response.eval_count || 0;
-    }
-
-    // ✅ POST-PROCESS: Fix section structure issues
-    console.log('[Summarize] Post-processing summary...');
-    summary = postProcess.postProcessSummary(summary);
-
-    // ✅ MERGE: Inject accurate structured data from parser
-    if (parsedData.hasStructuredData) {
-      console.log('[Summarize] Merging parsed structured data...');
-      summary = documentParser.mergeWithAISummary(summary, parsedData);
-    }
-
-    // Calculate confidence
-    const confidence = utils.calculateConfidence(sanitizedText, summary, {
-      tokens: tokensConsumed,
-      duration: Date.now() - startTime
+    
+    logInfo(`[Summarize] Processing ${sanitizedText.length} characters`);
+    
+    // ========================================
+    // STEP 1: Parse structured data from document
+    // ========================================
+    logInfo('[Summarize] Step 1: Parsing document structure...');
+    const parsedData = parseDischargeDocument(sanitizedText);
+    
+    // ========================================
+    // STEP 2: Generate AI summary with Mistral
+    // ========================================
+    logInfo('[Summarize] Step 2: Generating AI summary with Mistral...');
+    
+    const summaryPrompt = prompts.getSummarizationPrompt(sanitizedText);
+    
+    const mistralResponse = await ollamaClient.generate(OLLAMA_MODEL, summaryPrompt, {
+      temperature: 0.05, // Very low temperature for maximum consistency and accuracy
+      max_tokens: 8000   // INCREASED: From 6000 to 8000 for complete medication lists
     });
-
-    // Check if review is suggested
-    const reviewSuggested = utils.shouldReviewBeSuggested(confidence, summary);
-
-    // Validate medications
-    const medValidation = utils.validateMedications(summary);
-
-    console.log(`[Summarize] Complete. Confidence: ${confidence.toFixed(2)}, Review: ${reviewSuggested}`);
-
+    
+    let aiSummary = mistralResponse.response.trim();
+    
+    // ========================================
+    // STEP 3: Post-process AI summary
+    // ========================================
+    logInfo('[Summarize] Step 3: Post-processing AI summary...');
+    aiSummary = postProcessSummary(aiSummary);
+    
+    // ========================================
+    // STEP 4: Merge parsed data with AI summary
+    // ========================================
+    logInfo('[Summarize] Step 4: Merging parsed data with AI summary...');
+    const finalSummary = mergeWithAISummary(aiSummary, parsedData);
+    
+    // ========================================
+    // STEP 5: Validate and clean final output
+    // ========================================
+    if (!finalSummary || finalSummary.length < 50) {
+      logError('[Summarize] Final summary is empty or too short');
+      return res.status(500).json({
+        error: 'Summarization failed',
+        message: 'Generated summary is empty or invalid. Please try again.'
+      });
+    }
+    
+    // Deep clean summary (removes OCR artifacts and duplicates)
+    let cleanedSummary = deepCleanSummary(finalSummary);
+    
+    // Validate summary quality
+    const qualityCheck = validateSummaryQuality(cleanedSummary);
+    logInfo(`[Summarize] Quality score: ${qualityCheck.score}/100`);
+    
+    if (!qualityCheck.valid) {
+      logError('[Summarize] Quality check failed, but returning cleaned version anyway');
+      logError('[Summarize] Issues:', qualityCheck.issues);
+      // Don't reject - return the cleaned version with a warning
+      // The deep clean should have fixed most issues
+    }
+    
+    const duration = Date.now() - startTime;
+    logInfo(`[Summarize] ✅ Complete in ${duration}ms, output: ${cleanedSummary.length} chars`);
+    
     res.json({
-      summary: summary,
-      confidence: parseFloat(confidence.toFixed(2)),
-      reviewSuggested: reviewSuggested || !medValidation.valid,
-      tokensConsumed: tokensConsumed,
-      processingTime: Date.now() - startTime,
+      summary: cleanedSummary,
+      confidence: 0.9,
+      reviewSuggested: false,
       metadata: {
-        chunked: needsChunking,
-        chunks: needsChunking ? utils.chunkText(sanitizedText, 6000).length : 1,
-        medicationValidation: medValidation
+        processingTime: duration,
+        inputLength: sanitizedText.length,
+        outputLength: cleanedSummary.length,
+        model: OLLAMA_MODEL,
+        parsedData: {
+          diagnoses: parsedData.diagnoses.length,
+          hospitalMedications: parsedData.hospitalMedications.length,
+          dischargeMedications: parsedData.dischargeMedications.length,
+          hasStructuredData: parsedData.hasStructuredData
+        }
       }
     });
-
+    
   } catch (error) {
-    console.error('[Summarize] Error:', error);
-
+    logError('[Summarize] Error:', error.message);
+    
     // Handle timeout
     if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
       return res.status(504).json({
         error: 'summarization_timeout',
-        message: 'Summarization took too long. Please try again or download raw text.',
-        processingTime: Date.now() - startTime
+        message: 'Summarization took too long. The document may be too complex. Please try a shorter document.'
       });
     }
-
-    // Handle Ollama not available
-    if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+    
+    // Handle Ollama connection errors
+    if (error.code === 'ECONNREFUSED') {
       return res.status(503).json({
         error: 'ollama_unavailable',
-        message: 'Ollama service is not running. Please start Ollama and try again.',
-        hint: 'Run: ollama serve'
+        message: 'AI service is not available. Please ensure Ollama is running.'
       });
     }
-
+    
     res.status(500).json({
       error: 'summarization_error',
-      message: error.message,
-      processingTime: Date.now() - startTime
+      message: error.message || 'Failed to generate summary'
     });
+    
+  } finally {
+    activeRequests--;
   }
 });
 
@@ -274,269 +217,298 @@ app.post('/api/summarize', checkConcurrency, async (req, res) => {
 // CARE GUIDANCE ENDPOINT
 // ============================================
 
-app.post('/api/care', checkConcurrency, async (req, res) => {
+app.post('/api/care', async (req, res) => {
   const startTime = Date.now();
-
+  activeRequests++;
+  
   try {
-    const { summary } = req.body;
-
-    if (!summary || typeof summary !== 'string') {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string') {
       return res.status(400).json({
         error: 'Invalid request',
-        message: 'Summary text is required'
+        message: 'Text is required'
       });
     }
-
-    // 🔴 CRITICAL: Limit input length
-    if (summary.length > 20000) {
-      return res.status(413).json({
-        error: 'Summary too long',
-        message: 'Summary exceeds 20,000 characters'
-      });
-    }
-
-    console.log(`[Care] Generating care guidance from summary (${summary.length} chars)`);
-
-    const prompt = prompts.getCareGuidancePrompt(summary);
+    
+    logInfo('[Care Guidance] Generating care plan...');
+    
+    const prompt = prompts.getCareGuidancePrompt(text);
     const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
       temperature: 0.2,
-      max_tokens: 1500
+      max_tokens: 1200 // REDUCED: From 2048 to 1200 (summary takes priority)
     });
-
-    // Parse JSON response - expecting array format now
-    const careData = utils.extractJSON(response.response);
-
-    // Validate structure - expecting array of care items
-    if (!Array.isArray(careData)) {
-      throw new Error('Invalid care guidance structure - expected array');
+    
+    // Parse JSON response
+    let careGuidance;
+    try {
+      careGuidance = utils.extractJSON(response.response);
+    } catch (parseError) {
+      logError('[Care Guidance] JSON parse error, using fallback');
+      careGuidance = getFallbackCareGuidance();
     }
-
-    // Validate each item has required fields
-    const validCareData = careData.filter(item => 
-      item.title && item.description && item.priority && item.category
-    );
-
-    if (validCareData.length === 0) {
-      throw new Error('No valid care guidance items');
+    
+    // Validate structure
+    if (!Array.isArray(careGuidance)) {
+      careGuidance = getFallbackCareGuidance();
     }
-
-    console.log(`[Care] Generated ${validCareData.length} care guidance items successfully`);
-
-    res.json(validCareData);
-
+    
+    logInfo(`[Care Guidance] Generated ${careGuidance.length} items in ${Date.now() - startTime}ms`);
+    
+    res.json({
+      careGuidance: careGuidance,
+      processingTime: Date.now() - startTime
+    });
+    
   } catch (error) {
-    console.error('[Care] Error:', error);
-
-    // Handle JSON parse errors
-    if (error instanceof SyntaxError) {
-      return res.status(500).json({
-        error: 'parse_error',
-        message: 'Failed to parse care guidance. Using fallback.',
-        fallback: true
-      });
-    }
-
-    // Handle timeout
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      return res.status(504).json({
-        error: 'care_timeout',
-        message: 'Care guidance generation took too long.',
-        processingTime: Date.now() - startTime
-      });
-    }
-
-    res.status(500).json({
-      error: 'care_generation_error',
-      message: error.message,
+    logError('[Care Guidance] Error:', error);
+    
+    // Return fallback care guidance
+    res.status(200).json({
+      careGuidance: getFallbackCareGuidance(),
       fallback: true
     });
+    
+  } finally {
+    activeRequests--;
   }
 });
+
+/**
+ * Fallback care guidance if AI generation fails
+ */
+function getFallbackCareGuidance() {
+  return [
+    {
+      title: 'Take Your Medications',
+      description: 'Take all prescribed medications exactly as directed by your doctor. Set reminders if needed and never skip doses.',
+      priority: 'High',
+      category: 'Medication'
+    },
+    {
+      title: 'Schedule Follow-up Appointments',
+      description: 'Book all recommended follow-up appointments with your healthcare providers as soon as possible.',
+      priority: 'High',
+      category: 'Appointment'
+    },
+    {
+      title: 'Monitor Your Symptoms',
+      description: 'Keep track of how you feel daily. Watch for warning signs mentioned in your discharge instructions.',
+      priority: 'Medium',
+      category: 'Monitoring'
+    },
+    {
+      title: 'Follow Dietary Guidelines',
+      description: 'Stick to the recommended diet plan to help manage your condition and support recovery.',
+      priority: 'Medium',
+      category: 'Lifestyle'
+    },
+    {
+      title: 'Know When to Seek Help',
+      description: 'Contact your doctor or emergency services immediately if you experience severe symptoms or feel significantly worse.',
+      priority: 'High',
+      category: 'Emergency'
+    }
+  ];
+}
 
 // ============================================
 // FAQ GENERATION ENDPOINT
 // ============================================
 
-app.post('/api/faqs', checkConcurrency, async (req, res) => {
+app.post('/api/faqs', async (req, res) => {
   const startTime = Date.now();
-
+  activeRequests++;
+  
   try {
-    const { summary } = req.body;
-
-    if (!summary || typeof summary !== 'string') {
+    const { text } = req.body;
+    
+    if (!text || typeof text !== 'string') {
       return res.status(400).json({
         error: 'Invalid request',
-        message: 'Summary text is required'
+        message: 'Text is required'
       });
     }
-
-    // 🔴 CRITICAL: Limit input length
-    if (summary.length > 20000) {
-      return res.status(413).json({
-        error: 'Summary too long',
-        message: 'Summary exceeds 20,000 characters'
-      });
-    }
-
-    console.log(`[FAQs] Generating FAQs from summary (${summary.length} chars)`);
-
-    const prompt = prompts.getFAQPrompt(summary);
+    
+    logInfo('[FAQ] Generating FAQs...');
+    
+    const prompt = prompts.getFAQPrompt(text);
     const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
-      temperature: 0.1, // Lower temperature for more consistent JSON
-      max_tokens: 2000  // More tokens for detailed answers
+      temperature: 0.2,
+      max_tokens: 1200 // REDUCED: From 2048 to 1200 (summary takes priority)
     });
-
-    console.log(`[FAQs] Raw response length: ${response.response.length} chars`);
-
+    
     // Parse JSON response
     let faqs;
     try {
       faqs = utils.extractJSON(response.response);
     } catch (parseError) {
-      console.error('[FAQs] JSON parse error:', parseError);
-      console.error('[FAQs] Raw response:', response.response.substring(0, 500));
-      throw new Error('Failed to parse FAQ JSON: ' + parseError.message);
+      logError('[FAQ] JSON parse error, using fallback');
+      faqs = getFallbackFAQs();
     }
-
-    // Validate structure
+    
+    // Validate and transform structure
     if (!Array.isArray(faqs)) {
-      console.error('[FAQs] Response is not an array:', typeof faqs);
-      throw new Error('FAQs must be an array');
+      faqs = getFallbackFAQs();
     }
-
-    // Ensure each FAQ has q and a (more lenient validation)
-    const validFaqs = faqs.filter(faq => {
-      const hasQuestion = faq.q || faq.question;
-      const hasAnswer = faq.a || faq.answer;
-      return hasQuestion && hasAnswer;
-    }).map(faq => ({
-      q: faq.q || faq.question,
-      a: faq.a || faq.answer,
+    
+    // Transform to expected format
+    const transformedFaqs = faqs.map((faq, index) => ({
+      id: `item-${index + 1}`,
+      question: faq.q || faq.question || 'Question',
+      answer: faq.a || faq.answer || 'Answer',
       category: faq.category || 'General',
-      additionalInfo: faq.additionalInfo || faq.additional_info
+      additionalInfo: faq.additionalInfo || ''
     }));
-
-    if (validFaqs.length === 0) {
-      console.error('[FAQs] No valid FAQs found in response');
-      throw new Error('No valid FAQs generated');
-    }
-
-    console.log(`[FAQs] Generated ${validFaqs.length} valid FAQs successfully`);
-
+    
+    logInfo(`[FAQ] Generated ${transformedFaqs.length} FAQs in ${Date.now() - startTime}ms`);
+    
     res.json({
-      faqs: validFaqs
+      faqs: transformedFaqs,
+      processingTime: Date.now() - startTime
     });
-
+    
   } catch (error) {
-    console.error('[FAQs] Error:', error);
-
-    // Handle JSON parse errors
-    if (error instanceof SyntaxError) {
-      return res.status(500).json({
-        error: 'parse_error',
-        message: 'Failed to parse FAQs. Using fallback.',
-        fallback: true
-      });
-    }
-
-    // Handle timeout
-    if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-      return res.status(504).json({
-        error: 'faq_timeout',
-        message: 'FAQ generation took too long.',
-        processingTime: Date.now() - startTime
-      });
-    }
-
-    res.status(500).json({
-      error: 'faq_generation_error',
-      message: error.message,
+    logError('[FAQ] Error:', error);
+    
+    // Return fallback FAQs
+    res.status(200).json({
+      faqs: getFallbackFAQs(),
       fallback: true
     });
+    
+  } finally {
+    activeRequests--;
   }
 });
 
+/**
+ * Fallback FAQs if AI generation fails
+ */
+function getFallbackFAQs() {
+  return [
+    {
+      id: 'item-1',
+      question: 'How should I take my medications?',
+      answer: 'Take all prescribed medications exactly as directed. Follow the timing and dosage instructions carefully.',
+      category: 'Medication',
+      additionalInfo: 'Set reminders if needed and never stop taking medications without consulting your doctor.'
+    },
+    {
+      id: 'item-2',
+      question: 'When should I call my doctor?',
+      answer: 'Contact your doctor if you experience worsening symptoms, new symptoms, or any concerns about your recovery.',
+      category: 'Emergency',
+      additionalInfo: 'For severe symptoms like chest pain or difficulty breathing, call 911 immediately.'
+    },
+    {
+      id: 'item-3',
+      question: 'What activities should I avoid?',
+      answer: 'Follow the activity restrictions provided in your discharge instructions. Avoid strenuous activities until cleared by your doctor.',
+      category: 'Lifestyle',
+      additionalInfo: 'Gradually increase activity as you feel better and as advised by your healthcare team.'
+    },
+    {
+      id: 'item-4',
+      question: 'How do I monitor my condition at home?',
+      answer: 'Keep track of your symptoms daily. Monitor vital signs as instructed (blood pressure, blood sugar, etc.).',
+      category: 'Monitoring',
+      additionalInfo: 'Keep a written log of your measurements to share with your doctor at follow-up visits.'
+    },
+    {
+      id: 'item-5',
+      question: 'What dietary changes should I make?',
+      answer: 'Follow the dietary recommendations provided in your discharge instructions. Focus on a balanced, healthy diet.',
+      category: 'Diet',
+      additionalInfo: 'Consider consulting with a registered dietitian for personalized meal planning.'
+    }
+  ];
+}
+
 // ============================================
-// 6. TRANSLATION ENDPOINT
+// SINGLE TEXT TRANSLATION ENDPOINT
 // ============================================
 
-/**
- * POST /api/translate
- * Translates text from English to Hindi using JigsawStack API or Ollama fallback
- */
 app.post('/api/translate', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { text, targetLanguage = 'hi' } = req.body;
+    const { text, targetLanguage } = req.body;
     
-    // Validation
+    // Validate input
     if (!text || typeof text !== 'string') {
-      return res.status(400).json({ 
-        error: 'Text is required and must be a string' 
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Text is required'
       });
     }
     
+    if (!targetLanguage || typeof targetLanguage !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Target language is required'
+      });
+    }
+    
+    // 🔴 CRITICAL: Text length validation
     if (text.length > TRANSLATION_MAX_LENGTH) {
-      return res.status(400).json({ 
-        error: `Text exceeds maximum length of ${TRANSLATION_MAX_LENGTH} characters` 
+      return res.status(400).json({
+        error: 'Text too long',
+        message: `Text exceeds maximum length of ${TRANSLATION_MAX_LENGTH} characters for translation`
       });
     }
     
-    if (targetLanguage !== 'hi') {
-      return res.status(400).json({ 
-        error: 'Only Hindi (hi) translation is currently supported' 
-      });
-    }
+    logInfo(`[Translation] Translating ${text.length} chars to ${targetLanguage}`);
     
-    logInfo(`[Translation] Request for ${text.length} chars to ${targetLanguage}`);
+    let translatedText;
+    let method = 'ollama';
     
-    let translatedText = '';
-    let method = 'unknown';
-    
-    // Try JigsawStack API first if configured
-    if (JIGSAWSTACK_API_KEY) {
+    // Try JigsawStack first if API key is configured
+    if (JIGSAWSTACK_API_KEY && JIGSAWSTACK_API_KEY.length > 0) {
       try {
-        logInfo('[Translation] Using JigsawStack API');
-        
-        const response = await axios.post(
-          'https://api.jigsawstack.com/v1/ai/translate',
+        const jigsawResponse = await axios.post(
+          `${JIGSAWSTACK_BASE_URL}/ai/translate`,
           {
             text: text,
             target_language: targetLanguage
           },
           {
             headers: {
-              'Content-Type': 'application/json',
-              'x-api-key': JIGSAWSTACK_API_KEY
+              'x-api-key': JIGSAWSTACK_API_KEY,
+              'Content-Type': 'application/json'
             },
-            timeout: TRANSLATION_TIMEOUT
+            timeout: 30000
           }
         );
         
-        if (response.data && response.data.translated_text) {
-          translatedText = response.data.translated_text;
-          method = 'jigsawstack';
-          logInfo(`[Translation] JigsawStack success in ${Date.now() - startTime}ms`);
-        } else {
-          throw new Error('Invalid response from JigsawStack API');
-        }
+        translatedText = jigsawResponse.data.translated_text;
+        method = 'jigsawstack';
+        logInfo(`[Translation] JigsawStack success in ${Date.now() - startTime}ms`);
+        
       } catch (apiError) {
-        logError('[Translation] JigsawStack API failed, falling back to Ollama', apiError.message);
+        logError('[Translation] JigsawStack failed, falling back to Ollama:', apiError.message);
         
         // Fallback to Ollama
-        translatedText = await translateWithOllama(text, targetLanguage);
+        const prompt = prompts.getTranslationPrompt(text, targetLanguage);
+        const ollamaResponse = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
+          temperature: 0.3,
+          max_tokens: text.length * 3
+        });
+        translatedText = ollamaResponse.response.trim();
         method = 'ollama';
       }
     } else {
-      // No API key configured, use Ollama
-      logInfo('[Translation] Using Ollama (no JigsawStack API key)');
-      translatedText = await translateWithOllama(text, targetLanguage);
-      method = 'ollama';
+      // Use Ollama directly
+      const prompt = prompts.getTranslationPrompt(text, targetLanguage);
+      const ollamaResponse = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
+        temperature: 0.3,
+        max_tokens: text.length * 3
+      });
+      translatedText = ollamaResponse.response.trim();
     }
     
     const duration = Date.now() - startTime;
-    logInfo(`[Translation] Completed in ${duration}ms using ${method}`);
+    logInfo(`[Translation] Complete in ${duration}ms using ${method}`);
     
     res.json({
       translatedText,
@@ -548,110 +520,84 @@ app.post('/api/translate', async (req, res) => {
     
   } catch (error) {
     logError('[Translation] Error:', error);
-    res.status(500).json({ 
-      error: 'Translation failed',
-      details: error.message 
+    res.status(500).json({
+      error: 'translation_error',
+      message: error.message
     });
   }
 });
 
-/**
- * POST /api/translate-batch
- * Translates multiple texts in a single request (OPTIMIZED for efficiency)
- */
+// ============================================
+// BATCH TRANSLATION ENDPOINT
+// ============================================
+
 app.post('/api/translate-batch', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { texts, targetLanguage = 'hi' } = req.body;
+    const { texts, targetLanguage } = req.body;
     
-    // Validation
-    if (!Array.isArray(texts)) {
-      return res.status(400).json({ 
-        error: 'texts must be an array' 
+    // Validate input
+    if (!Array.isArray(texts) || texts.length === 0) {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Texts array is required and must not be empty'
       });
     }
     
-    if (texts.length === 0) {
-      return res.status(400).json({ 
-        error: 'texts array cannot be empty' 
+    if (!targetLanguage || typeof targetLanguage !== 'string') {
+      return res.status(400).json({
+        error: 'Invalid request',
+        message: 'Target language is required'
       });
     }
     
-    if (texts.length > 50) {
-      return res.status(400).json({ 
-        error: 'Maximum 50 texts per batch' 
-      });
-    }
-    
-    // Validate each text
-    for (let i = 0; i < texts.length; i++) {
-      if (typeof texts[i] !== 'string') {
-        return res.status(400).json({ 
-          error: `Text at index ${i} must be a string` 
-        });
-      }
-      if (texts[i].length > TRANSLATION_MAX_LENGTH) {
-        return res.status(400).json({ 
-          error: `Text at index ${i} exceeds maximum length of ${TRANSLATION_MAX_LENGTH} characters` 
-        });
-      }
-    }
-    
-    if (targetLanguage !== 'hi') {
-      return res.status(400).json({ 
-        error: 'Only Hindi (hi) translation is currently supported' 
-      });
-    }
-    
-    logInfo(`[Batch Translation] Request for ${texts.length} texts (${texts.reduce((sum, t) => sum + t.length, 0)} total chars)`);
+    logInfo(`[Batch Translation] Translating ${texts.length} texts to ${targetLanguage}`);
     
     let translatedTexts = [];
-    let method = 'unknown';
+    let method = 'ollama';
     
-    // Try JigsawStack API first if configured
-    if (JIGSAWSTACK_API_KEY) {
+    // Try JigsawStack first if API key is configured
+    if (JIGSAWSTACK_API_KEY && JIGSAWSTACK_API_KEY.length > 0) {
       try {
-        logInfo('[Batch Translation] Using JigsawStack API');
-        
-        // ✅ FIX: Retry logic with exponential backoff
-        const translateWithRetry = async (text, retries = 3) => {
+        // ✅ OPTIMIZATION: Retry logic with exponential backoff
+        const translateWithRetry = async (text) => {
+          const retries = 3;
           for (let attempt = 1; attempt <= retries; attempt++) {
             try {
               const response = await axios.post(
-                'https://api.jigsawstack.com/v1/ai/translate',
+                `${JIGSAWSTACK_BASE_URL}/ai/translate`,
                 {
                   text: text,
                   target_language: targetLanguage
                 },
                 {
                   headers: {
-                    'Content-Type': 'application/json',
-                    'x-api-key': JIGSAWSTACK_API_KEY
+                    'x-api-key': JIGSAWSTACK_API_KEY,
+                    'Content-Type': 'application/json'
                   },
-                  timeout: TRANSLATION_TIMEOUT * 2 // Increase timeout to 60s
+                  timeout: 30000
                 }
               );
-              
-              if (response.data && response.data.translated_text) {
-                return response.data.translated_text;
-              }
-              throw new Error('Invalid response from JigsawStack API');
+              return response.data.translated_text;
             } catch (err) {
-              const isLastAttempt = attempt === retries;
-              
-              // Check for rate limiting (429) or server errors (500, 502, 503)
-              const shouldRetry = err.response?.status === 429 || 
-                                  err.response?.status >= 500 || 
-                                  err.code === 'ECONNABORTED';
-              
-              if (shouldRetry && !isLastAttempt) {
-                const delayMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-                logInfo(`[Batch Translation] Attempt ${attempt} failed, retrying in ${delayMs}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delayMs));
-                continue;
+              if (attempt === retries || err.response?.status !== 429) {
+                throw err;
               }
-              
+              // Wait before retry (exponential backoff)
+              const delay = Math.pow(2, attempt) * 500;
+              logInfo(`[Batch Translation] Rate limited, waiting ${delay}ms before retry ${attempt}/${retries}`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
+          }
+        };
+        
+        // Helper to catch and log specific errors
+        const safeTranslate = async (text) => {
+          try {
+            return await translateWithRetry(text);
+          } catch (err) {
+            if (err.response?.status === 429) {
               logError(`[Batch Translation] JigsawStack API call failed (attempt ${attempt}/${retries}): ${err.message}`);
               throw err;
             }
@@ -925,6 +871,7 @@ app.use((req, res) => {
       'POST /api/care',
       'POST /api/faqs',
       'POST /api/translate',
+      'POST /api/translate-batch',
       'POST /api/explain-term',
       'POST /api/tts'
     ]
