@@ -88,6 +88,22 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
     loadGlossary();
   }, []);
 
+  // ✅ Load voices for TTS (sometimes loads asynchronously)
+  useEffect(() => {
+    // Load voices initially
+    const loadVoices = () => {
+      const voices = window.speechSynthesis.getVoices();
+      console.log('[TTS] Voices loaded:', voices.length);
+    };
+    
+    loadVoices();
+    
+    // Some browsers load voices asynchronously
+    if (window.speechSynthesis.onvoiceschanged !== undefined) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
+
   // Handle language translation for summary, care guidance, and FAQs
   useEffect(() => {
     const performTranslation = async () => {
@@ -124,8 +140,31 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
         // Instead of 3 separate calls (summary, care guidance, FAQs)
         const textsToTranslate: string[] = [];
         
-        // 1. Add summary
-        textsToTranslate.push(documentData.simplified);
+        // 1. Add summary - SPLIT INTO SECTIONS to avoid timeouts with large text
+        // Split by section headers (e.g., **PATIENT HISTORY**, **DIAGNOSIS**, etc.)
+        const summarySections = documentData.simplified.split(/\*\*([A-Z][A-Z\s]+)\*\*/g).filter(s => s.trim());
+        
+        // If splitting worked, add each section separately; otherwise add as one text
+        if (summarySections.length > 1) {
+          console.log(`[Translation] Split summary into ${summarySections.length} sections`);
+          summarySections.forEach(section => {
+            if (section.trim()) {
+              textsToTranslate.push(section.trim());
+            }
+          });
+        } else {
+          // No section headers found, split by paragraphs (double newlines)
+          const paragraphs = documentData.simplified.split('\n\n').filter(p => p.trim());
+          if (paragraphs.length > 1) {
+            console.log(`[Translation] Split summary into ${paragraphs.length} paragraphs`);
+            paragraphs.forEach(para => textsToTranslate.push(para.trim()));
+          } else {
+            // Last resort: send as single text
+            textsToTranslate.push(documentData.simplified);
+          }
+        }
+        
+        const summaryTextCount = textsToTranslate.length;
         
         // 2. Add care guidance (title + description for each)
         careGuidance.forEach(item => {
@@ -146,7 +185,7 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
           }
         });
         
-        console.log(`[Translation] Translating ${textsToTranslate.length} texts in ONE batch call...`);
+        console.log(`[Translation] Translating ${textsToTranslate.length} texts (${summaryTextCount} summary sections) in ONE batch call...`);
         
         // ✅ ONE API CALL for everything
         const { translateBatch } = await import('../services/batchTranslationService');
@@ -154,8 +193,12 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
         
         let translationIndex = 0;
         
-        // 1. Extract summary translation
-        const translatedSummary = result.translatedTexts[translationIndex++];
+        // 1. Extract summary translation - REJOIN the sections
+        const translatedSummaryParts: string[] = [];
+        for (let i = 0; i < summaryTextCount; i++) {
+          translatedSummaryParts.push(result.translatedTexts[translationIndex++]);
+        }
+        const translatedSummary = translatedSummaryParts.join('\n\n');
         
         // 2. Extract care guidance translations
         const translatedGuidance = careGuidance.map(item => ({
@@ -448,15 +491,54 @@ export default function ResultsPage({ documentData }: ResultsPageProps) {
       const utterance = new SpeechSynthesisUtterance(textToSpeak);
       
       // Set language for speech synthesis
-      if (selectedLanguage === 'hi' && !showOriginal) {
-        utterance.lang = 'hi-IN';
+      const isHindi = selectedLanguage === 'hi' && !showOriginal;
+      
+      if (isHindi) {
+        // ✅ FIX: Check if Hindi voices are available
+        const voices = window.speechSynthesis.getVoices();
+        const hindiVoices = voices.filter(voice => 
+          voice.lang.startsWith('hi') || 
+          voice.lang.startsWith('hi-IN')
+        );
+        
+        console.log('[TTS] Available voices:', voices.length);
+        console.log('[TTS] Hindi voices found:', hindiVoices.length, hindiVoices.map(v => `${v.name} (${v.lang})`));
+        
+        if (hindiVoices.length === 0) {
+          // No Hindi voices available
+          toast.error(
+            'Hindi voice not available on your device. Please:\n' +
+            '1. Use English audio instead, or\n' +
+            '2. Install Hindi language pack in your OS settings, or\n' +
+            '3. Try a different browser (Chrome/Edge recommended)',
+            { duration: 6000 }
+          );
+          return;
+        }
+        
+        // Use the first Hindi voice found
+        utterance.voice = hindiVoices[0];
+        utterance.lang = hindiVoices[0].lang;
+        console.log('[TTS] Using Hindi voice:', hindiVoices[0].name, hindiVoices[0].lang);
       } else {
-        utterance.lang = 'en-US';
+        // English voices (always available)
+        const voices = window.speechSynthesis.getVoices();
+        const englishVoices = voices.filter(voice => 
+          voice.lang.startsWith('en')
+        );
+        
+        if (englishVoices.length > 0) {
+          utterance.voice = englishVoices[0];
+          utterance.lang = englishVoices[0].lang;
+        } else {
+          utterance.lang = 'en-US';
+        }
       }
       
       utterance.onend = () => setIsPlaying(false);
-      utterance.onerror = () => {
+      utterance.onerror = (event) => {
         setIsPlaying(false);
+        console.error('[TTS] Error:', event);
         toast.error('Audio playback failed. Try downloading the text instead.');
       };
       

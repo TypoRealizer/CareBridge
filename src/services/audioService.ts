@@ -12,8 +12,8 @@ import { API_CONFIG, API_ENDPOINTS } from '../config/apiConfig';
  * Sarvam API Documentation:
  * - Endpoint: https://api.sarvam.ai/speech-to-text
  * - Method: POST with multipart/form-data
- * - Authentication: api-subscription-key header
- * - Models: saarika:flash (latest), saarika:v2.5, saarika:v2, saarika:v1
+ * - Authentication: API-Subscription-Key header (case-sensitive!)
+ * - Models: saarika:v1 (stable)
  * - Supported formats: MP3, WAV, FLAC, OGG
  * - Max file size: 25MB
  */
@@ -72,42 +72,77 @@ export const transcribeAudio = async (
   try {
     // Prepare FormData for Sarvam API (uses multipart/form-data, not JSON)
     const formData = new FormData();
-    formData.append('file', audioFile);
     
-    // Try newer models first (they support language_code), fallback to v1 without language
-    // saarika:flash is the latest and fastest model
-    formData.append('model', 'saarika:flash');
+    // CRITICAL: Append 'file' field with the audio file
+    formData.append('file', audioFile, audioFile.name);
     
     // Map language to Sarvam format
     const sarvamLanguage = mapToSarvamLanguage(language);
+    
+    // Sarvam API v1 expects ONLY 'file' and optionally 'language_code'
+    // Do NOT send 'model' parameter - it's not in the API spec
     formData.append('language_code', sarvamLanguage);
 
-    console.log(`🎤 Transcribing audio with Sarvam API (model: saarika:flash, language: ${sarvamLanguage})...`);
+    console.log(`🎤 Transcribing audio with Sarvam API (language: ${sarvamLanguage})...`);
+    console.log(`📄 File details: ${audioFile.name} (${(audioFile.size / 1024 / 1024).toFixed(2)}MB, ${audioFile.type})`);
 
     const response = await fetch(API_ENDPOINTS.SARVAM_SPEECH_TO_TEXT, {
       method: 'POST',
       headers: {
+        // CRITICAL: Sarvam uses 'API-Subscription-Key' (case-sensitive!)
+        'API-Subscription-Key': API_CONFIG.SARVAM_API_KEY,
         // DO NOT set Content-Type - browser will set it automatically with boundary for FormData
-        'api-subscription-key': API_CONFIG.SARVAM_API_KEY,
       },
       body: formData
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      // Try to get detailed error information
+      let errorData;
+      const responseText = await response.text();
+      
+      try {
+        errorData = JSON.parse(responseText);
+      } catch {
+        errorData = { message: responseText };
+      }
+      
+      console.error('❌ Sarvam API Error Details:', {
+        status: response.status,
+        statusText: response.statusText,
+        errorData: errorData,
+        requestHeaders: {
+          'API-Subscription-Key': API_CONFIG.SARVAM_API_KEY.substring(0, 10) + '...',
+        },
+        fileInfo: {
+          name: audioFile.name,
+          size: audioFile.size,
+          type: audioFile.type
+        }
+      });
       
       if (response.status === 401 || response.status === 403) {
         throw new Error('Invalid Sarvam API key. Please check your configuration.');
       } else if (response.status === 429) {
         throw new Error('API rate limit exceeded. Please try again in a few moments.');
+      } else if (response.status === 400) {
+        throw new Error(
+          `Bad Request: ${errorData.message || errorData.error || 'Invalid audio file or parameters'}\n\n` +
+          'Please ensure:\n' +
+          '1. Audio file is valid (MP3, WAV, FLAC, OGG)\n' +
+          '2. File size is under 25MB\n' +
+          '3. Audio contains clear speech'
+        );
       }
       
       throw new Error(
-        `Sarvam API Error: ${errorData.error?.message || errorData.message || response.statusText}`
+        `Sarvam API Error (${response.status}): ${errorData.error?.message || errorData.message || errorData.error || response.statusText}`
       );
     }
 
     const data = await response.json();
+    
+    console.log('📊 Sarvam API Response:', data);
     
     // Sarvam API response format: { transcript: "..." }
     const transcript = data.transcript;
@@ -138,22 +173,21 @@ export const transcribeAudioWithDetection = async (
   audioFile: File
 ): Promise<{ text: string; language: string }> => {
   try {
-    // Use English as default and let Sarvam handle detection
-    const formData = new FormData();
-    formData.append('file', audioFile);
-    formData.append('model', 'saarika:flash');
     // Don't specify language_code to enable auto-detection
+    const formData = new FormData();
+    formData.append('file', audioFile, audioFile.name);
 
     const response = await fetch(API_ENDPOINTS.SARVAM_SPEECH_TO_TEXT, {
       method: 'POST',
       headers: {
-        'api-subscription-key': API_CONFIG.SARVAM_API_KEY,
+        'API-Subscription-Key': API_CONFIG.SARVAM_API_KEY,
       },
       body: formData
     });
 
     if (!response.ok) {
-      throw new Error('Failed to transcribe audio');
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to transcribe audio');
     }
 
     const data = await response.json();

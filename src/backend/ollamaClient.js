@@ -128,7 +128,7 @@ async function listModels() {
 
 /**
  * Sanitize input text before sending to model
- * Removes non-text binary artifacts
+ * Removes non-text binary artifacts while preserving document structure
  * @param {string} text - Input text
  * @returns {string} Sanitized text
  */
@@ -137,13 +137,17 @@ function sanitizeInput(text) {
     return '';
   }
 
-  // Remove null bytes and other control characters
+  // Remove null bytes and other control characters (but preserve newlines and tabs)
   let sanitized = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
   
-  // Normalize whitespace
-  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  // ✅ CRITICAL FIX: Preserve newlines for document structure
+  // Only normalize excessive horizontal whitespace (multiple spaces/tabs)
+  sanitized = sanitized.replace(/[ \t]+/g, ' '); // Collapse multiple spaces/tabs to single space
+  sanitized = sanitized.replace(/\n[ \t]+/g, '\n'); // Remove leading spaces after newlines
+  sanitized = sanitized.replace(/[ \t]+\n/g, '\n'); // Remove trailing spaces before newlines
+  sanitized = sanitized.replace(/\n{3,}/g, '\n\n'); // Collapse excessive newlines to max 2
   
-  return sanitized;
+  return sanitized.trim();
 }
 
 module.exports = {
