@@ -105,31 +105,87 @@ function validateSummaryQuality(summary) {
 }
 
 /**
- * Deep clean summary - more aggressive than postProcessSummary
+ * Deep clean summary - SUPER AGGRESSIVE cleaning
  * @param {string} summary - Summary to clean
  * @returns {string} - Cleaned summary
  */
 function deepCleanSummary(summary) {
-  console.log('[Validator] Performing deep clean...');
+  console.log('[Validator] Performing SUPER AGGRESSIVE clean...');
   
   let cleaned = summary;
   
-  // REMOVE: Everything before first section header
-  const firstSection = cleaned.match(/\*\*PATIENT HISTORY\*\*|\*\*CONDITION WHEN ADMITTED\*\*|\*\*DIAGNOSIS AND TREATMENT/i);
-  if (firstSection) {
-    const startIndex = cleaned.indexOf(firstSection[0]);
-    if (startIndex > 50) {
-      console.log('[Validator] Removing garbage before first section');
-      cleaned = cleaned.substring(startIndex);
-    }
+  // ========================================
+  // PHASE 1: Remove all OCR garbage - MULTIPLE PASSES
+  // ========================================
+  
+  for (let pass = 0; pass < 5; pass++) {
+    // Remove "Prepared by" section and everything after
+    cleaned = cleaned.replace(/\*\*PREPARED BY\*\*[\s\S]*/gi, '');
+    cleaned = cleaned.replace(/PREPARED BY:[\s\S]*/gi, '');
+    cleaned = cleaned.replace(/- Prepared by[\s\S]*/gi, '');
+    cleaned = cleaned.replace(/Prepared by[\s\S]*/gi, '');
+    
+    // Remove "NOTE:" section
+    cleaned = cleaned.replace(/\*\*NOTE:\*\*[\s\S]*?(?=\*\*[A-Z]|$)/gi, '');
+    
+    // Remove trailing "DISCHARGE SUMMARY" duplicate section
+    cleaned = cleaned.replace(/\*\*DISCHARGE SUMMARY\*\*[\s\S]*/gi, '');
+    
+    // Remove header garbage from diagnoses
+    cleaned = cleaned.replace(/DIAGNOSES:\s*-\s*DISCHARGE SUMMARY/gi, 'DIAGNOSES:');
+    cleaned = cleaned.replace(/-\s*DISCHARGE SUMMARY\s*/gi, '');
+    cleaned = cleaned.replace(/-\s*Months\s*\/\s*Female/gi, '');
+    cleaned = cleaned.replace(/-\s*\d+\s*Years\s*\/?\s*(Male|Female)?/gi, '');
+    
+    // ========================================
+    // AGGRESSIVE: Fix ALL "> patterns (OCR artifacts)
+    // ========================================
+    
+    // Fix common medical term patterns
+    cleaned = cleaned.replace(/Lymph gland cancer["']?\s*>\s*Lymphoma/gi, 'Lymphoma');
+    cleaned = cleaned.replace(/systemic\s+artery\s+walls["']?\s*>\s*hypertension/gi, 'high blood pressure');
+    cleaned = cleaned.replace(/artery\s+walls["']?\s*>\s*[Hh]ypertension/gi, 'high blood pressure');
+    cleaned = cleaned.replace(/SYSTEMIC\s+artery\s+walls["']?\s*>\s*HYPERTENSION/gi, 'high blood pressure');
+    cleaned = cleaned.replace(/ultrasound["']?\s*>\s*/gi, '');
+    
+    // Generic pattern: "word1 word2">word3 → just use word3
+    // Match: any text followed by "> then a word, keep only the word after >
+    cleaned = cleaned.replace(/[\w\s]+["']?\s*>\s*([A-Z][a-z]+)/g, '$1');
+    
+    // Medical abbreviation patterns
+    cleaned = cleaned.replace(/Kidney function marker["']?\s*>\s*creatinine/gi, 'creatinine');
+    cleaned = cleaned.replace(/Liver function marker["']?\s*>\s*bilirubin/gi, 'bilirubin');
+    cleaned = cleaned.replace(/Infection fighters["']?\s*>\s*white blood cells/gi, 'white blood cells');
+    
+    // Generic: Remove any remaining "> patterns
+    cleaned = cleaned.replace(/["']?\s*>\s*/g, ' ');
+    
+    // Remove RWMA, LVDD garbage
+    cleaned = cleaned.replace(/RWMA,\s*GRADE\s*\d+LVDD,\s*PASP-\d+MMHG\.?\s*/gi, '');
+    cleaned = cleaned.replace(/NO\s+RWMA,\s*GRADE\s*\d+LVDD,\s*PASP-\d+MMHG/gi, '');
+    cleaned = cleaned.replace(/right ventricular pressure\s*\(RWMA\)/gi, 'right ventricle function (normal)');
+    
+    // Remove mashed medications in Note field
+    cleaned = cleaned.replace(/\*\*Note:\*\*\s*FOLLOWED BY[\s\S]{50,500}?\s*\d{3}\s+\d{3}\s*\|/gi, '');
+    cleaned = cleaned.replace(/Note:\s*FOLLOWED BY[\s\S]{50,500}?\s*\d{3}\s+\d{3}\s*\|/gi, '');
+    
+    // Remove trailing garbage
+    cleaned = cleaned.replace(/\s+\d{3}\s+\d{3}\s*\|\s*/g, '');
+    cleaned = cleaned.replace(/\s+\d{3,}\s*\|\s*/g, '');
+    
+    // Remove other OCR artifacts
+    cleaned = cleaned.replace(/www\.[a-z0-9\-]+\.(org|com|in)[^\s]*/gi, '');
+    cleaned = cleaned.replace(/KMC\s*No\.?\s*\d{5,}/gi, '');
   }
   
-  // REMOVE: Duplicate sections (keep only first occurrence)
+  // ========================================
+  // PHASE 2: Remove duplicate sections
+  // ========================================
+  
   const sections = [
     'PATIENT HISTORY',
     'CONDITION WHEN ADMITTED',
     'DIAGNOSIS AND TREATMENT GIVEN',
-    'TEST RESULTS',
     'CONDITION AT DISCHARGE',
     'MEDICATIONS TO FOLLOW AFTER DISCHARGE',
     'FOLLOW-UP AND FUTURE CARE',
@@ -137,62 +193,76 @@ function deepCleanSummary(summary) {
   ];
   
   for (const section of sections) {
-    const regex = new RegExp(`(\\*\\*${section}\\*\\*[\\s\\S]*?)(\\*\\*${section}\\*\\*)`, 'gi');
+    // Find all occurrences
+    const pattern = new RegExp(`\\*\\*${section}\\*\\*`, 'gi');
+    const matches = [];
     let match;
-    while ((match = regex.exec(cleaned)) !== null) {
-      console.log(`[Validator] Removing duplicate section: ${section}`);
-      // Remove the duplicate (second occurrence)
-      cleaned = cleaned.substring(0, match.index + match[1].length) + cleaned.substring(match.index + match[0].length);
+    
+    // Reset regex
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(cleaned)) !== null) {
+      matches.push(match.index);
+    }
+    
+    if (matches.length > 1) {
+      console.log(`[Validator] Found ${matches.length} copies of "${section}", keeping only first`);
+      
+      // Keep everything up to and including first occurrence
+      // Remove from second occurrence to the end
+      const firstOccurrence = matches[0];
+      const secondOccurrence = matches[1];
+      
+      // Keep: start -> first section + content
+      // Remove: second section onwards
+      cleaned = cleaned.substring(0, secondOccurrence);
     }
   }
   
-  // REMOVE: "Prepared by" and everything after it
-  cleaned = cleaned.replace(/[\s\S]*Prepared by:[\s\S]*/i, '');
-  cleaned = cleaned.replace(/[\s\S]*- Prepared by[\s\S]*/i, '');
+  // ========================================
+  // PHASE 3: Fix formatting and add proper spacing
+  // ========================================
   
-  // REMOVE: Header garbage from diagnoses
-  cleaned = cleaned.replace(/DIAGNOSES:\s*-\s*DISCHARGE SUMMARY\s*-\s*\d+\s*Years[\s\S]{0,100}Female\s*/i, 'DIAGNOSES:\n');
+  // Fix broken section headers
+  cleaned = cleaned.replace(/\*\*\s*TO FOLLOW AFTER DISCHARGE\s*\*\*/gi, '**MEDICATIONS TO FOLLOW AFTER DISCHARGE**');
+  cleaned = cleaned.replace(/\*\* TO FOLLOW/gi, '**MEDICATIONS TO FOLLOW');
   
-  // REMOVE: Mashed medications in Note field - extract and format properly
-  const mashedMedsMatch = cleaned.match(/Note:\s*(TAB|CAP|INJ)[\s\S]{100,}/i);
-  if (mashedMedsMatch) {
-    console.log('[Validator] Extracting mashed medications from Note field');
-    const mashedText = mashedMedsMatch[0];
-    
-    // Try to split by medication patterns
-    const medPattern = /(TAB|CAP|INJ)\s+([A-Z\s]+)\s+(\d+(?:\.\d+)?(?:MG|GM|ML))\s+([\d\-]+)\s+X\s+(\d+)\s+DAYS/gi;
-    let match;
-    let extractedMeds = [];
-    
-    while ((match = medPattern.exec(mashedText)) !== null) {
-      const [_, type, name, dose, timing, days] = match;
-      extractedMeds.push(`• **${type} ${name.trim()} ${dose}**`);
-      extractedMeds.push(`  - Timing: ${timing}`);
-      extractedMeds.push(`  - Duration: ${days} days`);
-    }
-    
-    if (extractedMeds.length > 0) {
-      // Replace the mashed section with properly formatted medications
-      cleaned = cleaned.replace(mashedMedsMatch[0], '\n' + extractedMeds.join('\n'));
-    }
+  // Add newlines BEFORE each section header (ensure spacing)
+  const allSections = [
+    'PATIENT HISTORY',
+    'CONDITION WHEN ADMITTED',
+    'DIAGNOSIS AND TREATMENT GIVEN',
+    'CONDITION AT DISCHARGE',
+    'MEDICATIONS TO FOLLOW AFTER DISCHARGE',
+    'FOLLOW-UP AND FUTURE CARE',
+    'ADDITIONAL INFORMATION'
+  ];
+  
+  for (const section of allSections) {
+    // Replace **SECTION** with \n\n**SECTION**\n (double newline before, single after)
+    const regex = new RegExp(`([^\\n])\\*\\*${section}\\*\\*`, 'gi');
+    cleaned = cleaned.replace(regex, `$1\n\n**${section}**\n`);
   }
   
-  // REMOVE: All OCR artifacts
-  cleaned = cleaned.replace(/artery walls["\']?>/gi, '');
-  cleaned = cleaned.replace(/systemic\s+artery\s+walls["\']?>\s*hypertension/gi, 'high blood pressure');
-  cleaned = cleaned.replace(/\(\s*systemic\s+artery\s+walls["\']?>\s*hypertension\s*\)/gi, '(high blood pressure)');
-  cleaned = cleaned.replace(/TOMBINU/g, '');
-  cleaned = cleaned.replace(/OLD MEDICATIONG/g, '');
-  cleaned = cleaned.replace(/www\.[a-z0-9\-]+\.(org|com|in)[^\s]*/gi, '');
-  cleaned = cleaned.replace(/KMC\s*No\.?\s*\d{5,}/gi, '');
-  cleaned = cleaned.replace(/RMHIP\/\d+/g, '');
-  cleaned = cleaned.replace(/MH\d{8}/g, '');
+  // Fix spacing after section headers that have dashes
+  cleaned = cleaned.replace(/\*\*([A-Z\s]+)\*\*\s*-\s*/g, '**$1**\n- ');
   
-  // Clean up whitespace
-  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  // Add spacing after subsections (DIAGNOSES:, TESTS:, etc.)
+  cleaned = cleaned.replace(/(DIAGNOSES:|TESTS & PROCEDURES:|HOSPITAL MEDICATIONS)/g, '\n$1\n');
+  
+  // Remove excessive newlines (more than 3)
+  cleaned = cleaned.replace(/\n{4,}/g, '\n\n\n');
+  
+  // Remove blank ** markers
+  cleaned = cleaned.replace(/^\*\*\s*\*\*$/gm, '');
+  cleaned = cleaned.replace(/\*\*\s*\*\*/g, '');
+  
+  // Trim each line
+  cleaned = cleaned.split('\n').map(line => line.trimEnd()).join('\n');
+  
+  // Final trim
   cleaned = cleaned.trim();
   
-  console.log('[Validator] Deep clean complete');
+  console.log('[Validator] SUPER AGGRESSIVE clean complete');
   return cleaned;
 }
 

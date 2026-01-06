@@ -15,7 +15,7 @@ const axios = require('axios');
 require('dotenv').config();
 
 const ollamaClient = require('./ollamaClient');
-const prompts = require('./prompts_new'); // UPDATED: Using improved prompts
+const prompts = require('./prompts_mistral_optimized'); // UPDATED: Using Mistral-optimized prompts
 const utils = require('./utils');
 const { parseDischargeDocument, mergeWithAISummary } = require('./documentParser');
 const { postProcessSummary } = require('./postProcessSummary');
@@ -133,10 +133,10 @@ app.post('/api/summarize', async (req, res) => {
     aiSummary = postProcessSummary(aiSummary);
     
     // ========================================
-    // STEP 4: Merge parsed data with AI summary
+    // STEP 4: Skip merge to prevent duplicates - use AI summary directly
     // ========================================
-    logInfo('[Summarize] Step 4: Merging parsed data with AI summary...');
-    const finalSummary = mergeWithAISummary(aiSummary, parsedData);
+    logInfo('[Summarize] Step 4: Using AI summary directly (no merge to prevent duplicates)...');
+    const finalSummary = aiSummary; // Direct use - validator will clean it
     
     // ========================================
     // STEP 5: Validate and clean final output

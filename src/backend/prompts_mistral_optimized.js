@@ -14,11 +14,12 @@ function getSummarizationPrompt(extractedText, isChunk = false) {
 
 CRITICAL RULES:
 1. Remove garbage: Don't copy "DISCHARGE SUMMARY", "76 Years", "Months/Female", "www.", "KMC No", doctor names, "Prepared by"
-2. Fix broken text: Change "artery walls">hypertension" to "high blood pressure"
+2. Fix broken text: Change "artery walls">hypertension" or "ultrasound">echo" or "word">word" to proper words WITHOUT the "> symbol
 3. Simplify terms: hypertension→high blood pressure, dyspnea→difficulty breathing, OAD→lung disease
 4. Each medication separate: NEVER combine medications in one line
+5. SPACING: Add blank lines between ALL sections
 
-OUTPUT FORMAT:
+OUTPUT FORMAT (with blank lines):
 
 **PATIENT HISTORY**
 - Previous conditions in simple words
@@ -42,16 +43,23 @@ HOSPITAL MEDICATIONS (During Stay):
 
 **MEDICATIONS TO FOLLOW AFTER DISCHARGE**
 
-• **TAB [NAME] [DOSE]**
-  - Timing: 1-0-0 (morning)
-  - Duration: X days
-  - Purpose: Why taking this
+• **TAB [NAME] [DOSE]** | Timing: 1-0-0 | Before/After food
+
+• **TAB [NAME] [DOSE]** | Timing: 0-1-0 | Before/After food
+
+(Keep it SHORT - just name, dose, timing, before/after food)
 
 **FOLLOW-UP AND FUTURE CARE**
 - Follow-up appointments
 
 **ADDITIONAL INFORMATION**
 - Emergency contacts
+
+IMPORTANT: 
+- Add a blank line before each ** section header
+- Do NOT add "NOTE:" or "DISCHARGE SUMMARY" sections at the end
+- For medications: ONLY show name, dose, timing (1-0-0), and before/after food - nothing else
+- Remove ALL "> symbols from text (like "artery walls">hypertension should become "high blood pressure")
 
 DOCUMENT:
 ${extractedText}
