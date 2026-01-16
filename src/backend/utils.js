@@ -198,6 +198,53 @@ function validateMedications(summary) {
 }
 
 /**
+ * Attempt to repair incomplete JSON
+ * @param {string} jsonText - Potentially incomplete JSON
+ * @returns {string} Repaired JSON
+ */
+function repairJSON(jsonText) {
+  let repaired = jsonText.trim();
+  
+  // Count opening and closing brackets/braces
+  const openBrackets = (repaired.match(/\[/g) || []).length;
+  const closeBrackets = (repaired.match(/\]/g) || []).length;
+  const openBraces = (repaired.match(/\{/g) || []).length;
+  const closeBraces = (repaired.match(/\}/g) || []).length;
+  
+  console.log('[JSON Repair] Open/Close counts:', {
+    brackets: `${openBrackets}/${closeBrackets}`,
+    braces: `${openBraces}/${closeBraces}`
+  });
+  
+  // If JSON is incomplete, try to complete it
+  if (openBrackets > closeBrackets || openBraces > closeBraces) {
+    console.log('[JSON Repair] Detected incomplete JSON, attempting repair...');
+    
+    // Remove any incomplete object at the end
+    const lastCompleteObject = repaired.lastIndexOf('}');
+    if (lastCompleteObject > 0) {
+      repaired = repaired.substring(0, lastCompleteObject + 1);
+    }
+    
+    // Add missing closing braces
+    const missingBraces = openBraces - closeBraces;
+    if (missingBraces > 0) {
+      repaired += '\n' + '}'.repeat(missingBraces);
+    }
+    
+    // Add missing closing brackets
+    const missingBrackets = openBrackets - closeBrackets;
+    if (missingBrackets > 0) {
+      repaired += '\n' + ']'.repeat(missingBrackets);
+    }
+    
+    console.log('[JSON Repair] Repaired JSON length:', repaired.length);
+  }
+  
+  return repaired;
+}
+
+/**
  * Extract JSON from text (handles markdown code blocks)
  * @param {string} text - Text containing JSON
  * @returns {object|array} Parsed JSON
@@ -205,20 +252,81 @@ function validateMedications(summary) {
 function extractJSON(text) {
   let jsonText = text.trim();
 
-  // Remove markdown code blocks
+  // Log the raw response for debugging
+  console.log('[JSON Extract] Raw text length:', jsonText.length);
+  console.log('[JSON Extract] First 200 chars:', jsonText.substring(0, 200));
+
+  // Remove markdown code blocks (```json ... ``` or ``` ... ```)
   if (jsonText.includes('```json')) {
-    jsonText = jsonText.split('```json')[1].split('```')[0].trim();
+    const parts = jsonText.split('```json');
+    if (parts.length > 1) {
+      jsonText = parts[1].split('```')[0].trim();
+    }
   } else if (jsonText.includes('```')) {
-    jsonText = jsonText.split('```')[1].split('```')[0].trim();
+    const parts = jsonText.split('```');
+    if (parts.length > 1) {
+      jsonText = parts[1].split('```')[0].trim();
+    }
   }
 
-  // Try to find JSON object/array
-  const jsonMatch = jsonText.match(/[\{\[][\s\S]*[\}\]]/);
-  if (jsonMatch) {
-    jsonText = jsonMatch[0];
+  // Remove any text before the first [ or {
+  const startArray = jsonText.indexOf('[');
+  const startObject = jsonText.indexOf('{');
+  
+  if (startArray !== -1 && (startArray < startObject || startObject === -1)) {
+    jsonText = jsonText.substring(startArray);
+  } else if (startObject !== -1) {
+    jsonText = jsonText.substring(startObject);
   }
 
-  return JSON.parse(jsonText);
+  // Remove any text after the last ] or }
+  const endArray = jsonText.lastIndexOf(']');
+  const endObject = jsonText.lastIndexOf('}');
+  
+  if (endArray !== -1 && endArray > endObject) {
+    jsonText = jsonText.substring(0, endArray + 1);
+  } else if (endObject !== -1) {
+    jsonText = jsonText.substring(0, endObject + 1);
+  }
+
+  // Clean up any trailing text after JSON
+  jsonText = jsonText.replace(/\]\s*\n+.*$/s, ']').replace(/\}\s*\n+.*$/s, '}');
+
+  console.log('[JSON Extract] Cleaned JSON length:', jsonText.length);
+
+  // Try to repair incomplete JSON
+  jsonText = repairJSON(jsonText);
+
+  try {
+    return JSON.parse(jsonText);
+  } catch (firstError) {
+    console.error('[JSON Extract] First parse failed:', firstError.message);
+    
+    // Try to fix common issues
+    // Fix single quotes to double quotes
+    let fixed = jsonText.replace(/'/g, '"');
+    
+    try {
+      return JSON.parse(fixed);
+    } catch (secondError) {
+      console.error('[JSON Extract] Second parse failed:', secondError.message);
+      
+      // Last resort: try to find and parse individual complete objects
+      const objectMatches = jsonText.match(/\{[^{}]*\}/g);
+      if (objectMatches && objectMatches.length > 0) {
+        console.log('[JSON Extract] Found', objectMatches.length, 'complete objects, reconstructing array...');
+        try {
+          const objects = objectMatches.map(obj => JSON.parse(obj));
+          return objects;
+        } catch (thirdError) {
+          console.error('[JSON Extract] Third parse failed:', thirdError.message);
+          throw new Error('Failed to parse JSON: ' + firstError.message);
+        }
+      }
+      
+      throw firstError;
+    }
+  }
 }
 
 module.exports = {

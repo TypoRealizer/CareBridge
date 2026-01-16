@@ -18,6 +18,7 @@ CRITICAL RULES:
 3. Simplify terms: hypertension→high blood pressure, dyspnea→difficulty breathing, OAD→lung disease
 4. Each medication separate: NEVER combine medications in one line
 5. SPACING: Add blank lines between ALL sections
+6. ⚠️ DO NOT make predictions: Don't predict prognosis, recovery time, or future health outcomes. Only summarize what's documented.
 
 OUTPUT FORMAT (with blank lines):
 
@@ -68,21 +69,56 @@ SIMPLIFIED VERSION:`;
 }
 
 function getCareGuidancePrompt(summaryText) {
-  return `Create 5 care instructions from this summary.
+  return `Based on this medical summary, create 5-6 SPECIFIC care instructions for THIS patient's condition.
 
 ${summaryText}
 
-Return ONLY JSON:
-[{"title":"","description":"","priority":"High/Medium/Low","category":"Medication/Appointment/Monitoring/Lifestyle/Emergency"}]`;
+REQUIRED TOPICS (use ACTUAL medication names, doses, and conditions from the summary):
+1. Medication instructions - Include specific drug names, dosages, timing from summary
+2. Follow-up appointments - When to see doctor for their specific condition
+3. Symptom monitoring - What symptoms to watch for their diagnosis
+4. Lifestyle changes - Diet/activity changes for their condition
+5. Warning signs - Emergency symptoms specific to their diagnosis
+
+⚠️ DO NOT make predictions about recovery time, prognosis, or future outcomes. Only use information from the document.
+
+DO NOT include: Patient name, doctor name, hospital name, dates
+
+Return ONLY a JSON array (max 80 chars per description):
+[{"title":"Take [Medication Name] Daily","description":"Take [drug] [dose] at [time] with food for [condition]. Never skip doses.","priority":"High","category":"Medication"}]
+
+Categories: Medication, Follow-up, Lifestyle, Warning Signs, Monitoring
+
+JSON array:`;
 }
 
 function getFAQPrompt(summaryText) {
-  return `Create 8 FAQs about this summary.
+  return `Generate 6-8 FAQs about HOME CARE for the medical conditions in this summary.
 
 ${summaryText}
 
-Return ONLY JSON:
-[{"q":"","a":"","category":"Medication/Diet/Lifestyle/Emergency/Monitoring/Follow-up/Recovery"}]`;
+GENERATE questions like:
+- "How should I take my medications?"
+- "What foods should I avoid?"
+- "When should I call the doctor?"
+- "What warning signs should I watch for?"
+- "Can I exercise after discharge?"
+- "How long will recovery take?"
+
+DO NOT generate questions like:
+- "What is the patient's name?" ❌
+- "Who is my doctor?" ❌
+- "What is my age?" ❌
+- "When was I admitted?" ❌
+
+⚠️ DO NOT make predictions about prognosis or future outcomes. Only use documented information.
+
+Focus on: medication management, diet, activities, warning signs, follow-up care, recovery
+
+Return ONLY valid JSON array (max 100 chars per answer):
+[{"q":"How should I take my medications?","a":"Take aspirin 81mg and atorvastatin 40mg daily with dinner. Never skip doses.","category":"Medication"}]
+
+JSON array:`;
 }
 
 function getTranslationPrompt(text, targetLanguage) {

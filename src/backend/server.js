@@ -236,20 +236,37 @@ app.post('/api/care', async (req, res) => {
     const prompt = prompts.getCareGuidancePrompt(text);
     const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
       temperature: 0.2,
-      max_tokens: 1200 // REDUCED: From 2048 to 1200 (summary takes priority)
+      max_tokens: 3500 // INCREASED: To prevent truncation
     });
+    
+    logInfo('[Care Guidance] Raw response length:', response.response.length);
+    logInfo('[Care Guidance] Raw response preview:', response.response.substring(0, 300));
     
     // Parse JSON response
     let careGuidance;
     try {
       careGuidance = utils.extractJSON(response.response);
+      
+      // Validate structure
+      if (!Array.isArray(careGuidance)) {
+        logError('[Care Guidance] Response is not an array, using fallback');
+        careGuidance = getFallbackCareGuidance();
+      } else if (careGuidance.length === 0) {
+        logError('[Care Guidance] Empty array returned, using fallback');
+        careGuidance = getFallbackCareGuidance();
+      } else {
+        // Transform to ensure proper structure
+        careGuidance = careGuidance.map((item, index) => ({
+          title: item.title || `Care Instruction ${index + 1}`,
+          description: item.description || item.desc || '',
+          priority: item.priority || 'Medium',
+          category: item.category || 'General'
+        }));
+        
+        logInfo('[Care Guidance] Successfully parsed', careGuidance.length, 'items');
+      }
     } catch (parseError) {
-      logError('[Care Guidance] JSON parse error, using fallback');
-      careGuidance = getFallbackCareGuidance();
-    }
-    
-    // Validate structure
-    if (!Array.isArray(careGuidance)) {
+      logError('[Care Guidance] JSON parse error:', parseError.message);
       careGuidance = getFallbackCareGuidance();
     }
     
@@ -335,36 +352,45 @@ app.post('/api/faqs', async (req, res) => {
     const prompt = prompts.getFAQPrompt(text);
     const response = await ollamaClient.generate(OLLAMA_MODEL, prompt, {
       temperature: 0.2,
-      max_tokens: 1200 // REDUCED: From 2048 to 1200 (summary takes priority)
+      max_tokens: 3500 // INCREASED: To prevent truncation
     });
+    
+    logInfo('[FAQ] Raw response length:', response.response.length);
+    logInfo('[FAQ] Raw response preview:', response.response.substring(0, 300));
     
     // Parse JSON response
     let faqs;
     try {
       faqs = utils.extractJSON(response.response);
+      
+      // Validate structure
+      if (!Array.isArray(faqs)) {
+        logError('[FAQ] Response is not an array, using fallback');
+        faqs = getFallbackFAQs();
+      } else if (faqs.length === 0) {
+        logError('[FAQ] Empty array returned, using fallback');
+        faqs = getFallbackFAQs();
+      } else {
+        // Transform to expected format
+        faqs = faqs.map((faq, index) => ({
+          id: `item-${index + 1}`,
+          question: faq.q || faq.question || `Question ${index + 1}`,
+          answer: faq.a || faq.answer || 'Answer not available',
+          category: faq.category || 'General',
+          additionalInfo: faq.additionalInfo || ''
+        }));
+        
+        logInfo('[FAQ] Successfully parsed', faqs.length, 'FAQs');
+      }
     } catch (parseError) {
-      logError('[FAQ] JSON parse error, using fallback');
+      logError('[FAQ] JSON parse error:', parseError.message);
       faqs = getFallbackFAQs();
     }
     
-    // Validate and transform structure
-    if (!Array.isArray(faqs)) {
-      faqs = getFallbackFAQs();
-    }
-    
-    // Transform to expected format
-    const transformedFaqs = faqs.map((faq, index) => ({
-      id: `item-${index + 1}`,
-      question: faq.q || faq.question || 'Question',
-      answer: faq.a || faq.answer || 'Answer',
-      category: faq.category || 'General',
-      additionalInfo: faq.additionalInfo || ''
-    }));
-    
-    logInfo(`[FAQ] Generated ${transformedFaqs.length} FAQs in ${Date.now() - startTime}ms`);
+    logInfo(`[FAQ] Generated ${faqs.length} FAQs in ${Date.now() - startTime}ms`);
     
     res.json({
-      faqs: transformedFaqs,
+      faqs: faqs,
       processingTime: Date.now() - startTime
     });
     

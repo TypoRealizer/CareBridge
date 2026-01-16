@@ -42,13 +42,13 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com';
 // Each model has its own daily limit
 // WARNING: These models have LOWER limits (20 RPD) compared to older models (1,500 RPD)
 const MODEL_CANDIDATES: Array<{ version: 'v1' | 'v1beta'; model: string }> = [
-  // Try newest models first (separate quotas)
-  { version: 'v1beta', model: 'gemini-3-flash' }, // Newest - 20 RPD limit
-  { version: 'v1', model: 'gemini-3-flash' }, // Try v1 API too
-  
   // Lite version (separate quota)
   { version: 'v1beta', model: 'gemini-2.5-flash-lite' }, // Lite - 20 RPD limit
   { version: 'v1', model: 'gemini-2.5-flash-lite' }, // Try v1 API too
+
+  // Try newest models first (separate quotas)
+  { version: 'v1beta', model: 'gemini-3-flash' }, // Newest - 20 RPD limit
+  { version: 'v1', model: 'gemini-3-flash' }, // Try v1 API too
   
   // Original model (likely exhausted, but try as last resort)
   { version: 'v1beta', model: 'gemini-2.0-flash-exp' },

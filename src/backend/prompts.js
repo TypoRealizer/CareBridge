@@ -338,36 +338,25 @@ Final consolidated summary:`;
  * Generates structured care instructions with JSON output
  */
 function getCareGuidancePrompt(summaryText) {
-  return `SYSTEM: You are a medical care coordinator. Based on the patient's discharge summary, create a comprehensive care plan with detailed, actionable instructions.
+  return `Based on this medical summary, create 5-6 SPECIFIC care instructions for THIS patient's condition.
 
-USER: Summary:
 ${summaryText}
 
-Generate care guidance as a JSON array with 5-7 specific care items. Each item must have:
-- "title": A clear, action-oriented heading (e.g., "Take Your Heart Medications")
-- "description": A detailed 2-3 sentence explanation with specific instructions, timing, and rationale based on the patient's condition
-- "priority": Either "High", "Medium", or "Low" based on medical urgency
-- "category": One of "Medication", "Appointment", "Monitoring", "Lifestyle", or "Emergency"
+REQUIRED TOPICS (use ACTUAL medication names, doses, and conditions from the summary):
+1. Medication instructions - Include specific drug names, dosages, timing from summary
+2. Follow-up appointments - When to see doctor for their specific condition
+3. Symptom monitoring - What symptoms to watch for their diagnosis
+4. Lifestyle changes - Diet/activity changes for their condition
+5. Warning signs - Emergency symptoms specific to their diagnosis
 
-The care items should be SPECIFIC to the patient's diagnosis, procedures, and medications mentioned in the summary. Include:
-1. Medication instructions with names, dosages, and timing
-2. Follow-up appointment scheduling
-3. Symptom monitoring specific to their condition
-4. Lifestyle modifications relevant to their diagnosis
-5. Warning signs to watch for
+DO NOT include: Patient name, doctor name, hospital name, dates
 
-Example format:
-[
-  {
-    "title": "Take Aspirin and Clopidogrel Daily",
-    "description": "Take aspirin 81mg and clopidogrel 75mg together each morning with food to prevent blood clots after your stent placement. These medications are crucial for preventing another heart attack. Do not skip doses or stop taking them without consulting your cardiologist, even if you feel better.",
-    "priority": "High",
-    "category": "Medication"
-  },
-  ...
-]
+Return ONLY a JSON array (max 80 chars per description):
+[{"title":"Take [Medication Name] Daily","description":"Take [drug] [dose] at [time] with food for [condition]. Never skip doses.","priority":"High","category":"Medication"}]
 
-Return ONLY a valid JSON array with 5-7 detailed care items, no additional text:`;
+Categories: Medication, Follow-up, Lifestyle, Warning Signs, Monitoring
+
+JSON array:`;
 }
 
 /**
@@ -375,35 +364,30 @@ Return ONLY a valid JSON array with 5-7 detailed care items, no additional text:
  * Generates patient-oriented Q&A pairs with detailed explanations
  */
 function getFAQPrompt(summaryText) {
-  return `You are a medical educator. Based on this discharge summary, create 10 practical FAQs that patients commonly ask.
+  return `Based on this medical summary, create 6-8 practical FAQs about managing THIS patient's condition at home.
 
-Summary:
 ${summaryText}
 
-Generate 10 FAQs in valid JSON format. Each FAQ must have:
-- q: The question (clear and specific)
-- a: The answer (2-4 sentences with practical advice)
-- category: One of [Medication, Diet, Lifestyle, Emergency, Monitoring, Follow-up, Recovery]
-
-Cover these topics:
+REQUIRED TOPICS (use ACTUAL details from the summary):
 1. How to take medications (names, doses, timing)
 2. What activities to avoid
 3. Diet changes needed
 4. Warning signs to watch for
 5. When to schedule follow-up
 6. What to monitor at home
-7. When to call 911
+7. When to call 112/emergency
 8. Exercise restrictions
 9. Managing the condition
 10. Recovery timeline
 
-Format:
-[
-  {"q":"How do I take my medications?","a":"Take aspirin 81mg and clopidogrel 75mg daily with food. Never skip doses. These prevent blood clots after your stent placement. Call your doctor before stopping any medication.","category":"Medication"},
-  {"q":"What activities should I avoid?","a":"Avoid heavy lifting over 10 pounds for 2 weeks. Don't do strenuous exercise until cleared by your doctor. Light walking is encouraged. Gradually increase activity as you feel better.","category":"Lifestyle"}
-]
+DO NOT ask: Patient personal info, doctor names, hospital details
 
-Return ONLY valid JSON (no extra text):`;
+Return ONLY a JSON array (max 100 chars per answer):
+[{"q":"How do I take my medications?","a":"Take [drug] [dose] daily with food. Never skip doses.","category":"Medication"}]
+
+Categories: Medication, Lifestyle, Diet, Emergency, Follow-up, Recovery
+
+JSON array:`;
 }
 
 /**
